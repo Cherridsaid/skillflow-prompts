@@ -1,0 +1,12 @@
+{
+  "schema_version": "1", "id": "brief", "version": "1.0.0",
+  "origin": "original synthetic brief example; declares one optional child",
+  "instructions": "Write a two-line synthetic brief that starts with SYNTHETIC. A glossary may be requested as a child skill.",
+  "outputs": ["text/plain"], "review_required": false, "human_approval_required": false,
+  "children": [{"id": "glossary", "contract": "glossary@1.0.0", "required": false}],
+  "steps": [
+    {"id": "draft", "obligations": [
+      {"id": "marker", "text": "The brief must start with the SYNTHETIC marker.", "origin_ref": "instructions#marker", "kind": "mechanical", "coverage": "complete", "verifier": "text", "role": "controller", "parameters": {"contains": ["SYNTHETIC"], "min_length": 12}}
+    ]}
+  ]
+}

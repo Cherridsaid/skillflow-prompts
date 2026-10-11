@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","additionalProperties":false,"properties":{"format":{"const":"skillflow-ed25519-v1"},"payload":{"type":"string"},"signature":{"type":"string"}},"required":["format","payload","signature"],"type":"object"}

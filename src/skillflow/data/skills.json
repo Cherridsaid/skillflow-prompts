@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "origin": "synthetic demo skills; each name maps to one approved contract and its profile",
+  "skills": {
+    "inventory": {"contract": "json-quality@1.0.0", "profile": "quality"},
+    "guarded-note": {"contract": "synthetic-legal@1.0.0", "profile": "legal"},
+    "brief": {"contract": "brief@1.0.0", "profile": "brief"},
+    "glossary": {"contract": "glossary@1.0.0", "profile": "glossary"},
+    "memo": {"contract": "memo@1.0.0", "profile": "memo"}
+  }
+}

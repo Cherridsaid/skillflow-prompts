@@ -1,0 +1,5 @@
+* text=auto eol=lf
+LICENSE -text
+*.png -text
+*.whl -text
+*.gz -text

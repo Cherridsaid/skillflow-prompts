@@ -1,0 +1,11 @@
+{
+  "schema_version": "1", "id": "editorial", "version": "1.0.0",
+  "origin": "original synthetic editorial example",
+  "instructions": "Write a short release note with Summary and Limitations. This independent third contract needs no core changes.",
+  "outputs": ["text/plain"], "review_required": false, "human_approval_required": false,
+  "steps": [
+    {"id": "headings", "obligations": [
+      {"id": "sections", "text": "Include both required headings.", "origin_ref": "instructions#sections", "kind": "mechanical", "coverage": "complete", "verifier": "text", "role": "controller", "parameters": {"contains": ["Summary", "Limitations"]}}
+    ]}
+  ]
+}

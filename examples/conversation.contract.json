@@ -1,0 +1,42 @@
+{
+  "schema_version": "1",
+  "id": "conversation",
+  "version": "1.0.0",
+  "origin": "Synthetic executable example; no business approval",
+  "instructions": "Provide a synthetic conversational answer. Submit the exact message before checking it. Independent review and explicit human approval must cover those bytes. A completed context alone does not authorize arbitrary final chat text.",
+  "outputs": [],
+  "review_required": true,
+  "human_approval_required": true,
+  "steps": [
+    {
+      "id": "message-content",
+      "inputs": ["message"],
+      "allowed_corrections": ["message_submit", "retry"],
+      "obligations": [{
+        "id": "synthetic-label",
+        "text": "The answer identifies itself as SYNTHETIC.",
+        "origin_ref": "Synthetic example instruction, first sentence",
+        "kind": "mechanical",
+        "coverage": "complete",
+        "verifier": "text",
+        "role": "controller",
+        "parameters": {"contains": ["SYNTHETIC"], "min_length": 12}
+      }]
+    },
+    {
+      "id": "independent-review",
+      "inputs": ["message"],
+      "depends_on": ["message-content"],
+      "allowed_corrections": ["message_submit", "retry"],
+      "obligations": [{
+        "id": "answer-review",
+        "text": "Review the complete answer for missing or false statements. Preserve uncertainty. A process exit code is not a semantic verdict.",
+        "origin_ref": "Synthetic example instruction, second sentence",
+        "kind": "judgment",
+        "coverage": "partial",
+        "verifier": "review",
+        "role": "reviewer"
+      }]
+    }
+  ]
+}

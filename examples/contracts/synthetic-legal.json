@@ -1,0 +1,14 @@
+{
+  "schema_version": "1", "id": "synthetic-legal", "version": "1.0.0",
+  "origin": "original synthetic example, no real legal source",
+  "instructions": "Produce a SYNTHETIC note with a Conclusion. Obtain independent review and explicit operator approval. Never treat this fixture as legal guidance.",
+  "outputs": ["text/plain"], "legal": true,
+  "steps": [
+    {"id": "draft", "obligations": [
+      {"id": "label", "text": "Label the document SYNTHETIC and include Conclusion.", "origin_ref": "instructions#label", "kind": "mechanical", "coverage": "complete", "verifier": "text", "role": "controller", "parameters": {"contains": ["SYNTHETIC", "Conclusion"], "min_length": 20}}
+    ]},
+    {"id": "judgment", "depends_on": ["draft"], "obligations": [
+      {"id": "independent-review", "text": "Review exact bytes for errors and omissions.", "origin_ref": "instructions#review", "kind": "judgment", "coverage": "partial", "verifier": "review", "role": "reviewer"}
+    ]}
+  ]
+}

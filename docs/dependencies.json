@@ -1,0 +1,360 @@
+{
+  "format": "1",
+  "source": "Official PyPI metadata",
+  "selection_cutoff": "2026-09-11T00:00:00+00:00",
+  "packages": [
+    {
+      "name": "annotated-doc",
+      "version": "0.0.5",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-07-28T13:50:57.239109Z",
+      "source": "https://pypi.org/project/annotated-doc/0.0.5/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-07-23T20:16:12.938651Z",
+      "source": "https://pypi.org/project/annotated-types/0.8.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "anyio",
+      "version": "4.15.1",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-09-05T10:42:37.923487Z",
+      "source": "https://pypi.org/project/anyio/4.15.1/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "attrs",
+      "version": "26.1.0",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-03-19T14:22:23.645947Z",
+      "source": "https://pypi.org/project/attrs/26.1.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "certifi",
+      "version": "2026.7.22",
+      "license_metadata": "MPL-2.0",
+      "first_file_published": "2026-07-22T03:35:11.276376Z",
+      "source": "https://pypi.org/project/certifi/2026.7.22/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1",
+      "license_metadata": "MIT-0",
+      "first_file_published": "2026-08-03T21:19:15.602573Z",
+      "source": "https://pypi.org/project/cffi/2.1.1/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "click",
+      "version": "8.5.0",
+      "license_metadata": "BSD-3-Clause",
+      "first_file_published": "2026-08-26T13:33:12.928043Z",
+      "source": "https://pypi.org/project/click/8.5.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "colorama",
+      "version": "0.4.6",
+      "license_metadata": "License :: OSI Approved :: BSD License",
+      "first_file_published": "2022-10-25T02:36:20.889702Z",
+      "source": "https://pypi.org/project/colorama/0.4.6/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "cryptography",
+      "version": "50.0.1",
+      "license_metadata": "Apache-2.0 OR BSD-3-Clause",
+      "first_file_published": "2026-08-25T19:44:03.155112Z",
+      "source": "https://pypi.org/project/cryptography/50.0.1/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "fastapi",
+      "version": "0.141.1",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-07-29T17:18:04.364385Z",
+      "source": "https://pypi.org/project/fastapi/0.141.1/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "h11",
+      "version": "0.16.0",
+      "license_metadata": "MIT",
+      "first_file_published": "2025-04-24T03:35:24.344199Z",
+      "source": "https://pypi.org/project/h11/0.16.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "hatchling",
+      "version": "1.32.0",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-08-11T05:03:42.644966Z",
+      "source": "https://pypi.org/project/hatchling/1.32.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "httpcore",
+      "version": "1.0.9",
+      "license_metadata": "BSD-3-Clause",
+      "first_file_published": "2025-04-24T22:06:20.566605Z",
+      "source": "https://pypi.org/project/httpcore/1.0.9/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "httpx",
+      "version": "0.28.1",
+      "license_metadata": "BSD-3-Clause",
+      "first_file_published": "2024-12-06T15:37:21.509172Z",
+      "source": "https://pypi.org/project/httpx/0.28.1/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "httpx-sse",
+      "version": "0.4.3",
+      "license_metadata": "MIT",
+      "first_file_published": "2025-10-10T21:48:21.158886Z",
+      "source": "https://pypi.org/project/httpx-sse/0.4.3/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "idna",
+      "version": "3.19",
+      "license_metadata": "BSD-3-Clause",
+      "first_file_published": "2026-08-18T05:14:22.343598Z",
+      "source": "https://pypi.org/project/idna/3.19/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "iniconfig",
+      "version": "2.3.0",
+      "license_metadata": "MIT",
+      "first_file_published": "2025-10-18T21:55:41.639305Z",
+      "source": "https://pypi.org/project/iniconfig/2.3.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "jsonschema",
+      "version": "4.26.0",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-01-07T13:41:05.306692Z",
+      "source": "https://pypi.org/project/jsonschema/4.26.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "jsonschema-specifications",
+      "version": "2025.9.1",
+      "license_metadata": "MIT",
+      "first_file_published": "2025-09-08T01:34:57.871954Z",
+      "source": "https://pypi.org/project/jsonschema-specifications/2025.9.1/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "mcp",
+      "version": "1.29.0",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-07-28T13:41:40.337890Z",
+      "source": "https://pypi.org/project/mcp/1.29.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "packaging",
+      "version": "26.3",
+      "license_metadata": "Apache-2.0 OR BSD-2-Clause",
+      "first_file_published": "2026-08-04T18:15:27.159957Z",
+      "source": "https://pypi.org/project/packaging/26.3/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "pathspec",
+      "version": "1.1.1",
+      "license_metadata": "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+      "first_file_published": "2026-04-27T01:46:07.060850Z",
+      "source": "https://pypi.org/project/pathspec/1.1.1/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "pluggy",
+      "version": "1.6.0",
+      "license_metadata": "MIT",
+      "first_file_published": "2025-05-15T12:30:06.134003Z",
+      "source": "https://pypi.org/project/pluggy/1.6.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "pycparser",
+      "version": "3.0",
+      "license_metadata": "BSD-3-Clause",
+      "first_file_published": "2026-01-21T14:26:50.693739Z",
+      "source": "https://pypi.org/project/pycparser/3.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "pydantic",
+      "version": "2.13.4",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-05-06T13:43:02.641507Z",
+      "source": "https://pypi.org/project/pydantic/2.13.4/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "pydantic-core",
+      "version": "2.46.4",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-05-06T13:36:51.018903Z",
+      "source": "https://pypi.org/project/pydantic-core/2.46.4/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "pydantic-settings",
+      "version": "2.15.0",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-08-07T09:24:55.839145Z",
+      "source": "https://pypi.org/project/pydantic-settings/2.15.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "pygments",
+      "version": "2.21.0",
+      "license_metadata": "BSD-2-Clause",
+      "first_file_published": "2026-08-17T08:02:44.912148Z",
+      "source": "https://pypi.org/project/pygments/2.21.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "pyjwt",
+      "version": "2.13.0",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-05-21T19:54:35.362086Z",
+      "source": "https://pypi.org/project/pyjwt/2.13.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "pytest",
+      "version": "9.1.1",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-06-19T10:58:31.347074Z",
+      "source": "https://pypi.org/project/pytest/9.1.1/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "python-dotenv",
+      "version": "1.2.3",
+      "license_metadata": "BSD-3-Clause",
+      "first_file_published": "2026-08-16T16:54:52.473346Z",
+      "source": "https://pypi.org/project/python-dotenv/1.2.3/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "python-multipart",
+      "version": "0.0.32",
+      "license_metadata": "Apache-2.0",
+      "first_file_published": "2026-06-04T16:18:57.319904Z",
+      "source": "https://pypi.org/project/python-multipart/0.0.32/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "pywin32",
+      "version": "312",
+      "license_metadata": "PSF",
+      "first_file_published": "2026-06-04T07:49:04.776060Z",
+      "source": "https://pypi.org/project/pywin32/312/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "referencing",
+      "version": "0.37.0",
+      "license_metadata": "MIT",
+      "first_file_published": "2025-10-13T15:30:47.625937Z",
+      "source": "https://pypi.org/project/referencing/0.37.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "rpds-py",
+      "version": "2026.6.3",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-06-30T07:14:54.821184Z",
+      "source": "https://pypi.org/project/rpds-py/2026.6.3/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "ruff",
+      "version": "0.16.7",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-09-10T18:03:30.280426Z",
+      "source": "https://pypi.org/project/ruff/0.16.7/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "sse-starlette",
+      "version": "3.4.11",
+      "license_metadata": "BSD-3-Clause",
+      "first_file_published": "2026-09-05T12:11:03.195488Z",
+      "source": "https://pypi.org/project/sse-starlette/3.4.11/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "starlette",
+      "version": "1.6.0",
+      "license_metadata": "BSD-3-Clause",
+      "first_file_published": "2026-08-08T18:27:56.196765Z",
+      "source": "https://pypi.org/project/starlette/1.6.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "tomlkit",
+      "version": "0.15.1",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-07-17T01:48:04.562015Z",
+      "source": "https://pypi.org/project/tomlkit/0.15.1/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "trove-classifiers",
+      "version": "2026.6.1.19",
+      "license_metadata": "License :: OSI Approved :: Apache Software License",
+      "first_file_published": "2026-06-01T19:41:33.434069Z",
+      "source": "https://pypi.org/project/trove-classifiers/2026.6.1.19/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "license_metadata": "PSF-2.0",
+      "first_file_published": "2026-07-02T08:40:04.659120Z",
+      "source": "https://pypi.org/project/typing-extensions/4.16.0/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.4",
+      "license_metadata": "MIT",
+      "first_file_published": "2026-08-12T12:37:24.648475Z",
+      "source": "https://pypi.org/project/typing-inspection/0.4.4/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "uvicorn",
+      "version": "0.52.4",
+      "license_metadata": "BSD-3-Clause",
+      "first_file_published": "2026-08-19T06:27:40.360546Z",
+      "source": "https://pypi.org/project/uvicorn/0.52.4/",
+      "redistributed_in_project_wheel": false
+    },
+    {
+      "name": "wsproto",
+      "version": "1.3.2",
+      "license_metadata": "MIT",
+      "first_file_published": "2025-11-20T18:18:00.454632Z",
+      "source": "https://pypi.org/project/wsproto/1.3.2/",
+      "redistributed_in_project_wheel": false
+    }
+  ],
+  "scope": "Locked direct and transitive dependencies, including development tools"
+}

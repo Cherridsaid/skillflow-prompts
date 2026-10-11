@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SkillFlow — contrôle privé</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+<style>body{font:16px system-ui;background:#0d1728;color:#eff5ff;max-width:1100px;margin:auto;padding:24px}button,input,select{padding:10px;margin:4px;background:#203655;color:white;border:1px solid #9bafc8;border-radius:6px}button:disabled{opacity:.5}button:focus-visible,input:focus-visible{outline:3px solid #88ffd2}table{width:100%;border-collapse:collapse;margin:20px 0}th,td{padding:10px;text-align:left;border-bottom:1px solid #4c6480}pre{white-space:pre-wrap;overflow-wrap:anywhere}h1,h2{font-weight:700;margin:20px 0}h1{font-size:28px}.danger{background:#782c36}</style>
+<main>
+<h1>SkillFlow — contrôle privé</h1>
+<p>Compteurs serveur. Aucun pourcentage global.</p>
+<label for="token">Jeton opérateur</label><input id="token" type="password" autocomplete="off" spellcheck="false">
+<button id="connect">Connecter</button><button id="disconnect">Déconnecter</button>
+<p id="state" role="status" aria-live="polite">Déconnecté. Données non mesurées.</p>
+<section aria-label="Commandes opérateur">
+<button id="start" disabled>Start — autoriser les opérations</button>
+<button id="kill" class="danger" disabled>Killswitch — suspendre les opérations</button>
+<label for="cases">Dossier</label><select id="cases"></select><button id="stop" disabled>Stop — annuler ce dossier</button>
+<p>Start ne lance aucun client. Les annulations restent définitives.</p>
+<p>L’arrêt supervise uniquement les processus lancés par SkillFlow.</p>
+</section>
+<h2>Dossiers et skills</h2>
+<div style="overflow:auto"><table><thead><tr><th scope="col">Dossier / skill</th><th scope="col">État</th><th scope="col">Validées / requises</th><th scope="col">Invalidations</th><th scope="col">Refus serveur</th><th scope="col">Corrections</th></tr></thead><tbody id="rows"></tbody></table></div>
+<h2>Couverture du catalogue</h2><pre id="catalog">Non mesuré</pre>
+<h2>Mesures et limites</h2><pre id="limits">Non mesuré</pre>
+<details><summary>Données brutes par dossier</summary><pre id="raw"></pre></details>
+</main>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+let credential="", socket=null, current=null;
+const show=value=>value===null||value===undefined?"non mesuré":String(value);
+function available(ok){for(const id of ["start","kill","stop"])$(id).disabled=!ok;}
+async function request(path,body){
+  const r=await fetch(path,{method:body?"POST":"GET",cache:"no-store",headers:{"Authorization":"Bearer "+credential,"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});
+  const data=await r.json();if(!data.ok)throw Error(data.error?.code||"État inconnu");return data.result;
+}
+function render(data){
+ current=data;available(true);$("state").textContent=data.control.paused?"Opérations suspendues":"Opérations autorisées";
+ const selected=$("cases").value;$("rows").replaceChildren();$("cases").replaceChildren();
+ function row(values){const tr=document.createElement("tr");for(const v of values){const td=document.createElement("td");td.textContent=show(v);tr.append(td);}$("rows").append(tr);}
+ for(const item of data.cases){
+  if(!item.ok){row([item.case_key,item.error?.code]);continue;}const s=item.result;
+  const option=document.createElement("option");option.value=s.case_id;option.textContent=item.case_key;$("cases").append(option);
+  row([item.case_key,s.state,`${s.validated} / ${s.required_total}`,s.invalidation_events,s.refusal_events,s.corrections]);
+  for(const k of s.skills)row(["↳ "+k.contract_id+" @ "+k.contract_version,k.entered?"Activé":"À activer",`${k.validated} / ${k.required_total}`,k.invalidation_events,k.refusal_events,k.corrections]);
+ }
+ if([...$("cases").options].some(o=>o.value===selected))$("cases").value=selected;
+ $("raw").textContent=JSON.stringify(data.cases,null,2);
+ $("limits").textContent="Réussites légitimes, refus injustifiés, contournements : non mesurés.\nPilote : non démarré.\n"+data.limits.join("\n");
+}
+function close(){if(socket)socket.close();socket=null;credential="";current=null;$("token").value="";available(false);$("state").textContent="Déconnecté";}
+$("disconnect").onclick=close;
+$("connect").onclick=async()=>{
+ const token=$("token").value.trim();close();credential=token;
+ try{render(await request("/v1/overview"));const c=await request("/v1/catalog");$("catalog").textContent=`Entrées détectées : ${show(c.detected)}\nEntrées avec contrat approuvé : ${show(c.contracts_approved)}\nParcours installés : ${show(c.installed)}\nProtections testées : ${show(c.effect_protected)}`;
+  socket=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/v1/live");const own=socket;
+  own.onopen=()=>own.send(credential);own.onmessage=e=>{if(socket===own)render(JSON.parse(e.data).result);};
+  own.onclose=()=>{if(socket===own){available(false);$("state").textContent="Connexion perdue. État inconnu.";}};
+ }catch(e){close();$("state").textContent=e.message;}
+};
+async function control(paused){available(false);try{await request("/v1/control",{paused,revision:current.control.revision,idempotency_key:crypto.randomUUID()});render(await request("/v1/overview"));}catch(e){$("state").textContent=e.message+" — reconnectez pour vérifier.";}}
+$("start").onclick=()=>control(false);$("kill").onclick=()=>control(true);
+$("stop").onclick=async()=>{const item=current?.cases.find(c=>c.ok&&c.result.case_id===$("cases").value);if(!item)return;available(false);
+ try{await request("/v1/call",{action:"flow_cancel",arguments:{case_id:item.result.case_id,reason:"operator-dashboard"},revision:item.result.revision,idempotency_key:crypto.randomUUID()});render(await request("/v1/overview"));}catch(e){$("state").textContent=e.message+" — reconnectez pour vérifier.";}
+};
+</script></html>

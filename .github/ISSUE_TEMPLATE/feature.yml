@@ -1,0 +1,9 @@
+name: Contract or integration proposal
+description: Describe a concrete need and observable acceptance evidence.
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Workflow, authority and acceptance criteria
+    validations:
+      required: true

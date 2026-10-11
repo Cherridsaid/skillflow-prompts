@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.skillflow/
+*.db*
+*.key
+*.token
+.env*
+graphify-out/
+benchmarks/local/
+release-local/

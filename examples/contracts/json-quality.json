@@ -1,0 +1,11 @@
+{
+  "schema_version": "1", "id": "json-quality", "version": "1.0.0",
+  "origin": "original synthetic data quality example",
+  "instructions": "Produce JSON describing one synthetic inventory item. Validate its schema before export.",
+  "outputs": ["application/json"], "review_required": false, "human_approval_required": false,
+  "steps": [
+    {"id": "validate-data", "obligations": [
+      {"id": "inventory-schema", "text": "The record must contain a name and a nonnegative integer quantity.", "origin_ref": "instructions#schema", "kind": "mechanical", "coverage": "complete", "verifier": "json", "role": "controller", "parameters": {"schema": {"type": "object", "properties": {"name": {"type": "string", "minLength": 1}, "quantity": {"type": "integer", "minimum": 0}}, "required": ["name", "quantity"], "additionalProperties": false}}}
+    ]}
+  ]
+}

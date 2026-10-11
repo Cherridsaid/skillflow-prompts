@@ -1,0 +1,11 @@
+{
+  "schema_version": "1", "id": "glossary", "version": "1.0.0",
+  "origin": "original synthetic glossary example; usable alone or as a child of brief",
+  "instructions": "Write one synthetic glossary entry containing the word Definition.",
+  "outputs": ["text/plain"], "review_required": false, "human_approval_required": false,
+  "steps": [
+    {"id": "entry", "obligations": [
+      {"id": "definition", "text": "The entry must contain the word Definition.", "origin_ref": "instructions#definition", "kind": "mechanical", "coverage": "complete", "verifier": "text", "role": "controller", "parameters": {"contains": ["Definition"]}}
+    ]}
+  ]
+}
