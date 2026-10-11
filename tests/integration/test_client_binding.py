@@ -4,13 +4,13 @@ from pathlib import Path
 import httpx
 import pytest
 
-from skillflow.bootstrap import create_demo
-from skillflow.client_hook import handle
-from skillflow.core import Controller
-from skillflow.harness import live_server
-from skillflow.integration import ClientBridge
-from skillflow.registry import authenticate
-from skillflow.util import FlowError, canonical, sha256, strict_json
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.client_hook import handle
+from skillflow_prompts.core import Controller
+from skillflow_prompts.harness import live_server
+from skillflow_prompts.integration import ClientBridge
+from skillflow_prompts.registry import authenticate
+from skillflow_prompts.util import FlowError, canonical, sha256, strict_json
 
 
 def provision(tmp_path, client="codex"):
@@ -159,7 +159,7 @@ def test_installed_handler_emits_native_json_denial_and_unbound_skill_blocks(tmp
         [
             sys.executable,
             "-m",
-            "skillflow",
+            "skillflow_prompts",
             "client-hook",
             "--config",
             str(tmp_path / "missing.json"),
@@ -175,7 +175,7 @@ def test_installed_handler_emits_native_json_denial_and_unbound_skill_blocks(tmp
 def test_failed_config_replacement_preserves_existing_client_settings(tmp_path, monkeypatch):
     import os
 
-    from skillflow.client_install import write_atomic
+    from skillflow_prompts.client_install import write_atomic
 
     target = tmp_path / "hooks.json"
     target.write_bytes(b'{"existing":"settings"}')
@@ -191,8 +191,8 @@ def test_failed_config_replacement_preserves_existing_client_settings(tmp_path, 
 
 
 def test_native_example_reads_exact_instructions_and_resume_bytes(tmp_path):
-    from skillflow.bootstrap import prepare_client_demo
-    from skillflow.demo import DemoSession
+    from skillflow_prompts.bootstrap import prepare_client_demo
+    from skillflow_prompts.demo import DemoSession
 
     root = tmp_path / "demo"
     prepared = prepare_client_demo(root, tmp_path / "workspace", "codex", "inventory", 18765)
@@ -222,8 +222,8 @@ def test_native_example_reads_exact_instructions_and_resume_bytes(tmp_path):
 
 
 def test_automatic_delivery_waits_for_current_approval_and_rejects_stale_review(tmp_path):
-    from skillflow.delivery import drain_outbox
-    from skillflow.demo import DemoSession
+    from skillflow_prompts.delivery import drain_outbox
+    from skillflow_prompts.demo import DemoSession
 
     root, workspace, _, _, _ = provision(tmp_path)
     config = strict_json((root / "config.json").read_bytes())

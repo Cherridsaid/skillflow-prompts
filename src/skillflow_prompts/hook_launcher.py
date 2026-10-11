@@ -3,7 +3,7 @@
 The tested shell entry has one quoted script argument. The child uses the exact venv.
 No launcher can override fail-open behavior if the client never starts it.
 
-Nothing here imports skillflow. The launcher has to keep answering precisely when the
+Nothing here imports skillflow_prompts. The launcher has to keep answering precisely when the
 package cannot be imported, which is the case it exists to survive: on 2026-09-19 a
 SyntaxError in core.py made the admission child exit non-zero, the launcher denied every
 operation, and both Claude Code and Codex went silent before any skill was even named.
@@ -75,7 +75,7 @@ def main():
         if len(payload) > 1_600_000:
             raise ValueError("Hook input exceeds limit")
         result = subprocess.run(
-            [args.python, "-m", "skillflow", "client-hook", "--config", args.config],
+            [args.python, "-m", "skillflow_prompts", "client-hook", "--config", args.config],
             input=payload,
             capture_output=True,
             timeout=20,

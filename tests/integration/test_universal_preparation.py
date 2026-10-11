@@ -5,15 +5,15 @@ import base64
 import httpx
 import pytest
 
-from skillflow.bootstrap import create_demo
-from skillflow.catalog import inventory_entry, package_files, unique_entries
-from skillflow.client_hook import handle
-from skillflow.core import Controller
-from skillflow.demo import DemoSession
-from skillflow.harness import live_server
-from skillflow.integration import ClientBridge
-from skillflow.registry import authenticate
-from skillflow.util import canonical, sha256, strict_json
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.catalog import inventory_entry, package_files, unique_entries
+from skillflow_prompts.client_hook import handle
+from skillflow_prompts.core import Controller
+from skillflow_prompts.demo import DemoSession
+from skillflow_prompts.harness import live_server
+from skillflow_prompts.integration import ClientBridge
+from skillflow_prompts.registry import authenticate
+from skillflow_prompts.util import canonical, sha256, strict_json
 
 
 def provision(tmp_path, *, outputless=False, catalog=False):

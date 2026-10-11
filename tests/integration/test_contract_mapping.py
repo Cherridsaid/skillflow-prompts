@@ -3,11 +3,11 @@ import copy
 import pytest
 
 from scripts.prepare_contract_reviews import prepare
-from skillflow.catalog import binding_errors, inventory_entry
-from skillflow.contract_mapping import approved_errors, basis, draft, validate
-from skillflow.models import Contract
-from skillflow.registry import Registry
-from skillflow.util import canonical, sha256
+from skillflow_prompts.catalog import binding_errors, inventory_entry
+from skillflow_prompts.contract_mapping import approved_errors, basis, draft, validate
+from skillflow_prompts.models import Contract
+from skillflow_prompts.registry import Registry
+from skillflow_prompts.util import canonical, sha256
 
 
 def review_fixture(tmp_path):

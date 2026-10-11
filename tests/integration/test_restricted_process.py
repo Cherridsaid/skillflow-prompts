@@ -19,8 +19,8 @@ def test_restricted_writer_cannot_access_authority_or_escape_in_child(tmp_path):
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows restricted process required")
 def test_invalid_launch_never_falls_back_to_unrestricted_process(tmp_path):
-    from skillflow.util import FlowError
-    from skillflow.windows_process import RestrictedProcess
+    from skillflow_prompts.util import FlowError
+    from skillflow_prompts.windows_process import RestrictedProcess
 
     target = tmp_path / "must-not-exist"
     command = [sys.executable, "-c", f"import pathlib;pathlib.Path({str(target)!r}).touch()"]
@@ -42,7 +42,7 @@ def test_invalid_launch_never_falls_back_to_unrestricted_process(tmp_path):
 @pytest.mark.skipif(os.name != "nt", reason="Windows restricted process required")
 def test_restricted_process_reports_the_token_it_actually_carries(tmp_path):
     from scripts.windows.restricted_probe import prepare_python, set_acl
-    from skillflow.windows_process import RestrictedProcess
+    from skillflow_prompts.windows_process import RestrictedProcess
 
     runtime = prepare_python(tmp_path)
     work = tmp_path / "work"

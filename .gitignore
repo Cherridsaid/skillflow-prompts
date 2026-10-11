@@ -6,9 +6,12 @@ __pycache__/
 dist/
 build/
 *.egg-info/
-.skillflow/
+.skillflow*/
+.claude/
 *.db*
+*.sqlite
 *.key
+*.pem
 *.token
 .env*
 graphify-out/

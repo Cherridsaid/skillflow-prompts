@@ -7,7 +7,7 @@ writer cannot create a case, choose its profile or impersonate a reviewer.
 Client event bodies cannot set progress or prove an OS effect. Installed skill
 hashes guard direct API mutation and automatic delivery. A changed approved
 contract invalidates progress/review after registry reload. The delivery worker
-never supplies mandatory human approval. See [native limits](client-compatibility.md).
+never supplies mandatory human approval.
 
 SkillFlow is an alpha controller, independent of `/phases`. Python adapters use
 the official MCP SDK; business decisions run only in `Controller.call`. SQLite

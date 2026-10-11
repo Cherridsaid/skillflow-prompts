@@ -3,15 +3,15 @@ import json
 
 import httpx
 
-from skillflow.bootstrap import create_demo
-from skillflow.demo import DemoSession
-from skillflow.harness import live_server
-from skillflow.server import Client
-from skillflow.util import canonical, strict_json, uid
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.demo import DemoSession
+from skillflow_prompts.harness import live_server
+from skillflow_prompts.server import Client
+from skillflow_prompts.util import canonical, strict_json, uid
 
 
 def test_separate_mutable_state_survives_http_restart_and_backup(tmp_path):
-    from skillflow.cli import main
+    from skillflow_prompts.cli import main
 
     root = create_demo(tmp_path / "authority")
     config = strict_json((root / "config.json").read_bytes())

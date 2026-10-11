@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from skillflow.core import Controller
-from skillflow.harness import live_server
-from skillflow.util import canonical, sha256, strict_json
+from skillflow_prompts.core import Controller
+from skillflow_prompts.harness import live_server
+from skillflow_prompts.util import canonical, sha256, strict_json
 from tests.integration.test_conversation import conversation
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="Windows process boundary required")
@@ -32,7 +32,7 @@ def complete(session):
 
 def prepare(tmp_path):
     from scripts.windows.restricted_probe import prepare_python, set_acl
-    from skillflow.boundary import windows_identity
+    from skillflow_prompts.boundary import windows_identity
 
     session = conversation(tmp_path)
     runtime = prepare_python(tmp_path)
@@ -101,7 +101,7 @@ def write_launch(tmp_path, launch, session, url):
 
 
 def test_unfinished_and_outage_never_release_or_spawn_unadmitted_process(tmp_path):
-    from skillflow.controlled_entry import run
+    from skillflow_prompts.controlled_entry import run
 
     session, launch = prepare(tmp_path)
     with live_server(session.root) as (url, _):
@@ -117,7 +117,7 @@ def test_unfinished_and_outage_never_release_or_spawn_unadmitted_process(tmp_pat
 
 
 def test_completed_entry_returns_only_exact_authority_message(tmp_path):
-    from skillflow.controlled_entry import run
+    from skillflow_prompts.controlled_entry import run
 
     session, launch = prepare(tmp_path)
     launch["argv"][-1] += (
@@ -143,7 +143,7 @@ def test_completed_entry_returns_only_exact_authority_message(tmp_path):
 
 
 def test_client_which_never_reads_stdin_cannot_escape_timeout(tmp_path):
-    from skillflow.controlled_entry import run
+    from skillflow_prompts.controlled_entry import run
 
     session, launch = prepare(tmp_path)
     launch.update(timeout_seconds=2)
@@ -162,8 +162,8 @@ def test_interruption_ends_actual_process_and_retains_output(tmp_path, interrupt
     import win32con
     import win32event
 
-    from skillflow.control import set_state
-    from skillflow.controlled_entry import run
+    from skillflow_prompts.control import set_state
+    from skillflow_prompts.controlled_entry import run
 
     session, launch = prepare(tmp_path)
     launch["argv"][-1] = "import os,time;print(os.getpid(),flush=True);time.sleep(30)"
@@ -201,8 +201,8 @@ def test_interruption_ends_actual_process_and_retains_output(tmp_path, interrupt
 
 
 def test_entry_refuses_a_manifest_without_an_explicit_network_decision(tmp_path):
-    from skillflow.controlled_entry import run
-    from skillflow.util import FlowError
+    from skillflow_prompts.controlled_entry import run
+    from skillflow_prompts.util import FlowError
 
     manifest = tmp_path / "launch.json"
     launch = {

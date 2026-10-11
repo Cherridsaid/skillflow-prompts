@@ -13,10 +13,10 @@ foreach ($name in $tasks) {
     $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
     if (-not $task) { continue }
     $expected = if ($name -eq $marker.task) {
-        $arguments = '-m skillflow serve --root "' + $authority + '"'
+        $arguments = '-m skillflow_prompts serve --root "' + $authority + '"'
         @($arguments, $arguments + ' --qualification')
     } else {
-        @('-m skillflow network-proxy --config "' + (Join-Path $authority 'proxy.json') + '" --log "' + (Join-Path $target 'state\proxy.jsonl') + '"')
+        @('-m skillflow_prompts network-proxy --config "' + (Join-Path $authority 'proxy.json') + '" --log "' + (Join-Path $target 'state\proxy.jsonl') + '"')
     }
     if ($task.Actions.Count -ne 1 -or [IO.Path]::GetFullPath($task.Actions[0].Execute) -ne $python -or
         $task.Actions[0].Arguments -notin $expected -or $task.Actions[0].WorkingDirectory -ne $authority) { throw "Task action ownership mismatch: $name" }

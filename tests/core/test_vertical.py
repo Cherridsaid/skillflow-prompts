@@ -1,5 +1,5 @@
-from skillflow.bootstrap import create_demo
-from skillflow.demo import DemoSession, run_demo
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.demo import DemoSession, run_demo
 
 
 def test_vertical_demo_preserves_evidence_and_rejects_changed_bytes(tmp_path):

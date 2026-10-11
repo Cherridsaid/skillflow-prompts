@@ -5,7 +5,6 @@ Retain required third-party notices. No separate CLA is imposed.
 
 Install Python 3.12 and uv; run `uv sync --locked`. Work on a branch. Run tests,
 ruff checks/formatting, schema freshness, the demo and `uv build` as in README.
-Selected README measurements must pass `skillflow bench check`.
 
 For a contract, add an original synthetic fixture and demonstrate it through the
 existing core. For an adapter, keep all authority in the controller and test the

@@ -10,7 +10,7 @@ as a client does: a payload on stdin, a config path, and a python that cannot ru
 
 import json
 
-from skillflow import hook_launcher
+from skillflow_prompts import hook_launcher
 
 
 def run_launcher(monkeypatch, capsys, tmp_path, config, event="UserPromptSubmit"):

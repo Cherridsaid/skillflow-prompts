@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from skillflow.util import canonical, require, sha256
+from skillflow_prompts.util import canonical, require, sha256
 
 
 def ordinary(path):

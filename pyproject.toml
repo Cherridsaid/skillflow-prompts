@@ -3,9 +3,9 @@ requires = ["hatchling==1.32.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "skillflow-mcp"
-version = "0.1.0a1"
-description = "Persistent skill workflow contracts and a signed artifact delivery gate"
+name = "skillflow-prompts"
+version = "0.1.0"
+description = "SkillFlow workflow contracts triggered by a prompt, with mechanical checks and signed receipts"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-skillflow = "skillflow.cli:main"
+skillflow-prompts = "skillflow_prompts.cli:main"
 
 [dependency-groups]
 dev = ["pytest==9.1.1", "ruff==0.16.7", "hatchling==1.32.0"]
@@ -27,7 +27,7 @@ dev = ["pytest==9.1.1", "ruff==0.16.7", "hatchling==1.32.0"]
 exclude-newer = "2026-09-11T00:00:00Z"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/skillflow"]
+packages = ["src/skillflow_prompts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

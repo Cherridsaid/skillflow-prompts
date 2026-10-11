@@ -4,13 +4,13 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from skillflow.bootstrap import create_demo
-from skillflow.control import overview, set_state, state
-from skillflow.core import Controller
-from skillflow.delivery import drain_outbox
-from skillflow.demo import DemoSession
-from skillflow.server import create_app
-from skillflow.util import FlowError
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.control import overview, set_state, state
+from skillflow_prompts.core import Controller
+from skillflow_prompts.delivery import drain_outbox
+from skillflow_prompts.demo import DemoSession
+from skillflow_prompts.server import create_app
+from skillflow_prompts.util import FlowError
 
 
 def test_persistent_pause_blocks_effects_and_preserves_idempotence(tmp_path):
@@ -104,7 +104,7 @@ def test_live_server_websocket_transport(tmp_path):
     from wsproto import ConnectionType, WSConnection
     from wsproto.events import AcceptConnection, Request, TextMessage
 
-    from skillflow.harness import live_server
+    from skillflow_prompts.harness import live_server
 
     create_demo(tmp_path)
     session = DemoSession(tmp_path)

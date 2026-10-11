@@ -789,8 +789,8 @@ wheels = [
 ]
 
 [[package]]
-name = "skillflow-mcp"
-version = "0.1.0a1"
+name = "skillflow-prompts"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },

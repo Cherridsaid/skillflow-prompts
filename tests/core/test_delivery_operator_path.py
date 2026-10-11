@@ -18,10 +18,10 @@ import json
 
 import pytest
 
-from skillflow.bootstrap import create_demo
-from skillflow.cli import deliver
-from skillflow.delivery import drain_outbox
-from skillflow.demo import DemoSession
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.cli import deliver
+from skillflow_prompts.delivery import drain_outbox
+from skillflow_prompts.demo import DemoSession
 
 VERSION_1 = "SYNTHETIC note, version 1.\nConclusion: synthetic fixture, no legal value."
 VERSION_2 = "SYNTHETIC note, version 2.\nConclusion: synthetic fixture, corrected wording."
@@ -185,8 +185,8 @@ def test_a_rejected_delivery_does_not_make_the_service_loop(tmp_path):
     """Found by adversarial review before this shipped: once a rejection closed the
     delivery, the automatic poller no longer saw a REQUESTED one and asked for a new
     delivery on every tick, collecting a refusal and a revision bump per second."""
-    from skillflow.integration import ClientBridge
-    from skillflow.util import canonical, sha256, strict_json
+    from skillflow_prompts.integration import ClientBridge
+    from skillflow_prompts.util import canonical, sha256, strict_json
 
     root = create_demo(tmp_path / "authority")
     workspace = tmp_path / "workspace"

@@ -12,10 +12,10 @@ import platform
 import sqlite3
 from pathlib import Path
 
-from skillflow import boundary, receipts
-from skillflow.client_install import write_atomic
-from skillflow.storage import state_path
-from skillflow.util import canonical, now, require, sha256, strict_json
+from skillflow_prompts import boundary, receipts
+from skillflow_prompts.client_install import write_atomic
+from skillflow_prompts.storage import state_path
+from skillflow_prompts.util import canonical, now, require, sha256, strict_json
 
 
 def evidence_file(base, item):

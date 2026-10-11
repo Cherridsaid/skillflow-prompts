@@ -47,7 +47,7 @@ resources are labelled unallocated, avoiding duplicate totals. Refusals are mark
 forbidden effect into a benchmark PREVENTED outcome.
 
 ```console
-uv run skillflow status CASE_ID --token-file OPERATOR_TOKEN --json --output flow-report.json
+uv run skillflow-prompts status CASE_ID --token-file OPERATOR_TOKEN --json --output flow-report.json
 ```
 
 Reports contain private business data and are not automatically published.

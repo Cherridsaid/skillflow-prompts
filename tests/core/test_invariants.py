@@ -6,14 +6,14 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 from pydantic import ValidationError
 
-from skillflow import receipts
-from skillflow.bootstrap import create_demo
-from skillflow.core import Controller
-from skillflow.delivery import drain_outbox
-from skillflow.demo import DemoSession
-from skillflow.models import Contract
-from skillflow.registry import Principal, Registry
-from skillflow.util import FlowError, canonical, strict_json
+from skillflow_prompts import receipts
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.core import Controller
+from skillflow_prompts.delivery import drain_outbox
+from skillflow_prompts.demo import DemoSession
+from skillflow_prompts.models import Contract
+from skillflow_prompts.registry import Principal, Registry
+from skillflow_prompts.util import FlowError, canonical, strict_json
 
 
 @pytest.fixture
@@ -93,7 +93,7 @@ def test_changed_approved_contract_invalidates_delivery_and_progress(session):
 def test_semantic_result_not_process_success_and_changed_verifier(session, monkeypatch):
     session.submit("SYNTHETIC but no required conclusion heading")
     assert session.check(expect=False)["error"]["code"] == "CHECK_FAILED"
-    from skillflow import verifiers
+    from skillflow_prompts import verifiers
 
     monkeypatch.setattr(verifiers, "implementation_hash", lambda: "0" * 64)
     assert session.check(expect=False)["error"]["code"] == "VERIFIER_CHANGED"
@@ -297,7 +297,7 @@ def test_crash_after_effect_before_record_is_reconciled_from_actual_bytes(sessio
         ]
         == "RESULT_UNKNOWN"
     )
-    import skillflow.delivery as delivery
+    import skillflow_prompts.delivery as delivery
 
     original = delivery.reconcile
 
@@ -346,7 +346,7 @@ def test_source_unavailable_login_truncation_and_expiration(session, monkeypatch
     root = create_demo(session.root.parent / "sources")
     (root / "contracts" / "synthetic-legal.json").write_bytes(canonical(document))
     source_session = DemoSession(root)
-    from skillflow import collector
+    from skillflow_prompts import collector
 
     for code in ("SOURCE_UNAVAILABLE", "SOURCE_MEDIA", "SOURCE_TRUNCATED"):
 
@@ -470,7 +470,7 @@ def test_contract_rejects_artifact_verifier_without_artifact_input(session):
 
 
 def test_pending_legacy_active_extension_never_exported(tmp_path, monkeypatch):
-    from skillflow import core
+    from skillflow_prompts import core
 
     legacy = DemoSession(create_demo(tmp_path / "legacy"), "demo-quality")
     # Seed a pre-fix accepted object and committed intent, never a real approval.

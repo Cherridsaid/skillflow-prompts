@@ -58,7 +58,7 @@ def provenance(repo):
         "os_release": platform.release(),
         "python": platform.python_version(),
         "machine": platform.machine(),
-        "packages": {n: version(n) for n in ["mcp", "cryptography", "skillflow-mcp"]},
+        "packages": {n: version(n) for n in ["mcp", "cryptography", "skillflow-prompts"]},
         "clients": None,
         "models": None,
         "coverage_profile": "demo",

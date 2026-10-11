@@ -7,10 +7,10 @@ import subprocess
 import time
 from pathlib import Path
 
-from skillflow.bootstrap import prepare_client_demo
-from skillflow.client_install import write_atomic
-from skillflow.harness import live_server
-from skillflow.util import canonical, sha256, strict_json
+from skillflow_prompts.bootstrap import prepare_client_demo
+from skillflow_prompts.client_install import write_atomic
+from skillflow_prompts.harness import live_server
+from skillflow_prompts.util import canonical, sha256, strict_json
 
 
 def main():

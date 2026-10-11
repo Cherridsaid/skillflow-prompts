@@ -33,7 +33,7 @@ def prepare_client_demo(root, workspace, client, skill, port):
     workspace.mkdir(parents=True, exist_ok=True)
     catalog = workspace / (".agents" if client == "codex" else ".claude") / "skills" / skill
     catalog.mkdir(parents=True)
-    text = files("skillflow").joinpath("data", skill + ".SKILL.md").read_bytes()
+    text = files("skillflow_prompts").joinpath("data", skill + ".SKILL.md").read_bytes()
     (catalog / "SKILL.md").write_bytes(text)
     profile, contract_id = mapping[skill]
     contract_path = root / "contracts" / (contract_id + ".json")
@@ -97,14 +97,16 @@ def demo_skills():
     """Synthetic skill declarations shipped as data: name -> {contract, profile}."""
     from .util import strict_json
 
-    return strict_json(files("skillflow").joinpath("data", "skills.json").read_bytes())["skills"]
+    return strict_json(files("skillflow_prompts").joinpath("data", "skills.json").read_bytes())[
+        "skills"
+    ]
 
 
 def skill_registry():
     """Registry entries pinned to the exact shipped SKILL.md bytes."""
     registry = {}
     for name, item in demo_skills().items():
-        text = files("skillflow").joinpath("data", name + ".SKILL.md").read_bytes()
+        text = files("skillflow_prompts").joinpath("data", name + ".SKILL.md").read_bytes()
         registry[name] = [
             {"sha256": sha256(text), "contract": item["contract"], "profile": item["profile"]}
         ]
@@ -117,14 +119,14 @@ def create_demo(root, port=8765):
         raise FileExistsError("Use an empty directory; existing state is never reset")
     root.mkdir(parents=True, exist_ok=True)
     (root / "contracts").mkdir()
-    for item in files("skillflow").joinpath("data").iterdir():
+    for item in files("skillflow_prompts").joinpath("data").iterdir():
         if item.name.endswith(".json") and item.name != "skills.json":
             (root / "contracts" / item.name).write_bytes(item.read_bytes())
     key = receipts.generate_key(root / "signing.key")
     public = key.public_key().public_bytes_raw()
     trust = {
         receipts.key_id(public): {
-            "issuer": "skillflow-demo",
+            "issuer": "skillflow-prompts-demo",
             "public_key": base64.b64encode(public).decode(),
             "profiles": ["demo"],
         }
@@ -145,7 +147,7 @@ def create_demo(root, port=8765):
     config = {
         "format": "1",
         "mode": "demo",
-        "issuer": "skillflow-demo",
+        "issuer": "skillflow-prompts-demo",
         "principals": principals,
         "profiles": {
             "legal": {"coverage": "demo", "contracts": ["synthetic-legal@1.0.0"]},

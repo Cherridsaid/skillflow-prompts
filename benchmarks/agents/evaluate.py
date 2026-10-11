@@ -11,9 +11,9 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from skillflow.bootstrap import create_demo
-from skillflow.demo import DemoSession
-from skillflow.util import canonical, now, sha256
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.demo import DemoSession
+from skillflow_prompts.util import canonical, now, sha256
 
 SCHEMA = {
     "type": "object",

@@ -1,6 +1,6 @@
 from scripts.analyze_catalog import analyze
-from skillflow.catalog import inventory_entry
-from skillflow.util import canonical, strict_json
+from skillflow_prompts.catalog import inventory_entry
+from skillflow_prompts.util import canonical, strict_json
 
 
 def test_diagnostics_do_not_turn_duplicates_exclusions_or_links_into_approval(tmp_path):

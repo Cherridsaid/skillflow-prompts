@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from skillflow.bootstrap import create_demo
-from skillflow.util import canonical, sha256, strict_json
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.util import canonical, sha256, strict_json
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="Windows network preparation")
 
@@ -38,7 +38,7 @@ def test_appcontainer_and_network_scripts_parse_and_plan_without_changes(tmp_pat
         root / "scripts/windows/Uninstall-SkillFlow.ps1",
     ]
     lifecycle_paths = ",".join(f"'{path}'" for path in lifecycle)
-    command = fr"""
+    command = rf"""
     foreach($p in @('{profile}','{install}','{remove}',{lifecycle_paths})) {{
       $null=[scriptblock]::Create((Get-Content -Raw -LiteralPath $p))
     }}
@@ -210,7 +210,7 @@ def test_qualification_and_rollback_validate_both_owned_tasks(tmp_path):
             }
         )
     )
-    command = fr"""
+    command = rf"""
     $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
     $saved=@{{name='SkillFlowService';sid=$identity.User.Value}}
     $record=Get-Content -Raw -LiteralPath '{journal}' | ConvertFrom-Json
@@ -225,9 +225,9 @@ def test_qualification_and_rollback_validate_both_owned_tasks(tmp_path):
       $python='C:\ProgramData\SkillFlowMCP-PrivatePilot\runtime\Scripts\python.exe'
       $authority='C:\ProgramData\SkillFlowMCP-PrivatePilot\authority'
       $arguments=if($TaskName -eq 'SkillFlowMCP-PrivatePilot'){{
-        '-m skillflow serve --root "' + $authority + '"'
+        '-m skillflow_prompts serve --root "' + $authority + '"'
       }}else{{
-        '-m skillflow network-proxy --config "' + $authority + '\proxy.json" --log "C:\ProgramData\SkillFlowMCP-PrivatePilot\state\proxy.jsonl"'
+        '-m skillflow_prompts network-proxy --config "' + $authority + '\proxy.json" --log "C:\ProgramData\SkillFlowMCP-PrivatePilot\state\proxy.jsonl"'
       }}
       [pscustomobject]@{{Actions=@([pscustomobject]@{{Execute=$python;Arguments=$arguments;WorkingDirectory=$authority}});
         Principal=[pscustomobject]@{{UserId=$identity.Name}}}}
@@ -252,7 +252,7 @@ def test_generic_uninstall_refuses_to_orphan_the_network_boundary(tmp_path):
     sid = "S-1-15-2-1-2-3-4-5-6-7"
     install_root = tmp_path / "install"
     install_root.mkdir()
-    command = fr"""
+    command = rf"""
     $root=(Resolve-Path -LiteralPath '{install_root}').Path
     @{{format='skillflow-install-v1';root=$root;task='SkillFlowMCP-Absent';proxy_task='SkillFlowMCP-Absent-Proxy';appcontainer_sid='{sid}'}} |
       ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'installation.json') -Encoding utf8
@@ -296,7 +296,7 @@ def test_protected_installer_refuses_each_announced_defect(tmp_path, case, messa
         subprocess.run(["attrib", "+h", str(evil)], check=True)
     elif case == "bad-sid":
         sid = "S-1-15-2-1-"
-    command = fr"""
+    command = rf"""
     & '{installer}' -InstallRoot '{tmp_path / "not-created"}' `
       -PreparedAuthority '{authority}' -Wheel '{wheel}' -WheelSha256 '{sha256(wheel.read_bytes())}' `
       -Requirements '{requirements}' -Python '{sys.executable}' -Uv '{uv}' `
@@ -323,7 +323,7 @@ def test_generic_uninstall_refuses_to_delete_through_a_junction(tmp_path):
         check=True,
         capture_output=True,
     )
-    command = fr"""
+    command = rf"""
     $root=(Resolve-Path -LiteralPath '{install_root}').Path
     @{{format='skillflow-install-v1';root=$root;task='SkillFlowMCP-Absent';proxy_task=$null;appcontainer_sid=$null}} |
       ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'installation.json') -Encoding utf8

@@ -125,7 +125,7 @@ def create_app(root, *, qualification=False):
     @app.get("/health")
     async def health():
         return {
-            "service": "skillflow",
+            "service": "skillflow-prompts",
             "version": __version__,
             "mode": "qualification" if controller.qualification else controller.config["mode"],
         }
@@ -304,7 +304,7 @@ class Client:
 async def serve_mcp(url, token_file, ca=None):
     client = Client(url, token_file, ca)
     server = Server(
-        "skillflow-mcp",
+        "skillflow-prompts",
         version=__version__,
         instructions="Use the provisioned case. Only exact gate-exported artifacts have receipts. "
         "Writer tools cannot start cases, assert connector observations, review or approve.",

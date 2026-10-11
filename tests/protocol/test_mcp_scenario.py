@@ -16,10 +16,10 @@ import time
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from skillflow.bootstrap import create_demo
-from skillflow.harness import live_server
-from skillflow.server import Client
-from skillflow.util import canonical, uid
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.harness import live_server
+from skillflow_prompts.server import Client
+from skillflow_prompts.util import canonical, uid
 
 
 def http(root, role, url, action, args, *, revision=None, key=None):
@@ -81,7 +81,7 @@ def test_ten_step_scenario_over_real_mcp(tmp_path):
                 command=sys.executable,
                 args=[
                     "-m",
-                    "skillflow",
+                    "skillflow_prompts",
                     "mcp",
                     "--url",
                     url,
@@ -213,7 +213,7 @@ def test_ten_step_scenario_over_real_mcp(tmp_path):
                 command=sys.executable,
                 args=[
                     "-m",
-                    "skillflow",
+                    "skillflow_prompts",
                     "mcp",
                     "--url",
                     url,

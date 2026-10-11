@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-import skillflow
-from skillflow.bootstrap import create_demo
-from skillflow.core import Controller
-from skillflow.demo import DemoSession, run_demo
-from skillflow.recovery import relative_path, restore_copy, snapshot
-from skillflow.server import DaemonLock
-from skillflow.util import FlowError, canonical, sha256, strict_json
+import skillflow_prompts
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.core import Controller
+from skillflow_prompts.demo import DemoSession, run_demo
+from skillflow_prompts.recovery import relative_path, restore_copy, snapshot
+from skillflow_prompts.server import DaemonLock
+from skillflow_prompts.util import FlowError, canonical, sha256, strict_json
 
 
 def installation(tmp_path, delivered=False):
@@ -24,7 +24,7 @@ def installation(tmp_path, delivered=False):
     # Snapshot real package bytes along with the synthetic workflow, never a
     # claimed installed or qualified Windows runtime.
     shutil.copytree(
-        Path(skillflow.__file__).parent,
+        Path(skillflow_prompts.__file__).parent,
         layout / "runtime" / "skillflow",
         ignore=shutil.ignore_patterns("__pycache__"),
     )

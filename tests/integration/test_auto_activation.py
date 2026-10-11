@@ -11,15 +11,15 @@ from importlib.resources import files
 
 import pytest
 
-from skillflow import client_hook
-from skillflow.bootstrap import create_demo
-from skillflow.core import Controller
-from skillflow.harness import live_server
-from skillflow.integration import ClientBridge
-from skillflow.registry import Principal, authenticate, covers
-from skillflow.util import uid
+from skillflow_prompts import client_hook
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.core import Controller
+from skillflow_prompts.harness import live_server
+from skillflow_prompts.integration import ClientBridge
+from skillflow_prompts.registry import Principal, authenticate, covers
+from skillflow_prompts.util import uid
 
-DATA = files("skillflow").joinpath("data")
+DATA = files("skillflow_prompts").joinpath("data")
 
 
 def install_skill(workspace, name, client="claude", text=None):
@@ -487,7 +487,7 @@ def test_a_user_level_skill_activates_without_a_workspace_copy(lab, tmp_path, mo
     """A personal catalogue lives in ~/.claude/skills, not in every workspace."""
     home = tmp_path / "home"
     install_skill(home, "memo")  # writes home/.claude/skills/memo/SKILL.md
-    monkeypatch.setattr("skillflow.integration.Path.home", lambda: home)
+    monkeypatch.setattr("skillflow_prompts.integration.Path.home", lambda: home)
     workspace = tmp_path / "ws-plain"
     workspace.mkdir()
     response = lab["bridge"].handle(lab["writer"], event(workspace, "memo"))

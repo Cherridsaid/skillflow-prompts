@@ -4,8 +4,8 @@ import argparse
 from collections import defaultdict
 from pathlib import Path
 
-from skillflow.contract_mapping import basis, draft
-from skillflow.util import canonical, sha256, strict_json
+from skillflow_prompts.contract_mapping import basis, draft
+from skillflow_prompts.util import canonical, sha256, strict_json
 
 
 def prepare(inventory, output):

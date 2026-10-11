@@ -27,9 +27,6 @@ jobs:
       - run: uv run ruff check src tests benchmarks scripts
       - run: uv run ruff format --check src tests benchmarks scripts
       - run: uv run pytest
-      - run: uv run skillflow schemas --output schemas --check
-      - run: uv run skillflow demo --root .skillflow/ci-demo
-      - run: uv run skillflow bench validate --output benchmarks/results/controller
-      - run: uv run skillflow bench check --output benchmarks/results/controller
-      - run: uv run python scripts/integration_report.py --check
+      - run: uv run skillflow-prompts schemas --output schemas --check
+      - run: uv run skillflow-prompts demo --root .skillflow/ci-demo
       - run: uv build

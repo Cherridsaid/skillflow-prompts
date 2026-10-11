@@ -3,11 +3,11 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
-from skillflow.benchmarks import aggregate, load, run, summarize, validate_trial
-from skillflow.bootstrap import create_demo
-from skillflow.demo import DemoSession
-from skillflow.schema_export import validate
-from skillflow.util import FlowError
+from skillflow_prompts.benchmarks import aggregate, load, run, summarize, validate_trial
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.demo import DemoSession
+from skillflow_prompts.schema_export import validate
+from skillflow_prompts.util import FlowError
 
 
 def test_connections_close_before_temporary_workspace_cleanup():

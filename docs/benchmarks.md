@@ -7,21 +7,20 @@ The integration suite exercises real loopback HTTP credentials under one user;
 it is not an OS-isolation or live Codex/Claude native-tool campaign.
 
 ```console
-uv run skillflow bench run --suite controller --repetitions 3 --output benchmarks/local/new-controller
-uv run skillflow bench run --suite integration --repetitions 3 --output benchmarks/local/new-http
-uv run skillflow bench run --suite agents --repetitions 1 --output benchmarks/local/unrun-agents
-uv run skillflow bench validate --output benchmarks/local/new-controller
-uv run skillflow bench aggregate --output benchmarks/local/new-controller
-uv run skillflow bench readme --output benchmarks/results/controller
-uv run skillflow bench check --output benchmarks/results/controller
+uv run skillflow-prompts bench run --suite controller --repetitions 3 --output benchmarks/local/new-controller
+uv run skillflow-prompts bench run --suite integration --repetitions 3 --output benchmarks/local/new-http
+uv run skillflow-prompts bench run --suite agents --repetitions 1 --output benchmarks/local/unrun-agents
+uv run skillflow-prompts bench validate --output benchmarks/local/new-controller
+uv run skillflow-prompts bench aggregate --output benchmarks/local/new-controller
 ```
 
 Use new directories: campaigns are never overwritten. The manifest is written
 before trials and fixes scenario paths, repetitions, criteria, rights and versions.
 Every planned scenario/repetition pair must have exactly one trace, even when it
 was not started. Unknown results, infrastructure exceptions and timeouts remain.
-The full JSONL data and selected summaries remain in Git with permanent relative
-links. Reaggregation is deterministic; rerunning timings is not byte-identical.
+skillflow-prompts ships no measurement results: the benchmark code is inherited
+from SkillFlow and produces local campaigns only. Reaggregation is deterministic;
+rerunning timings is not byte-identical.
 
 Outcome categories are exclusive: PREVENTED, FORBIDDEN_EFFECT, LEGITIMATE_SUCCESS,
 FALSE_BLOCK, UNKNOWN, INFRA_ERROR, NOT_RUN. PREVENTED requires the observed absence

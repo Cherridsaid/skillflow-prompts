@@ -10,10 +10,10 @@ import subprocess
 import sys
 import time
 
-from skillflow.bootstrap import create_demo
-from skillflow.harness import live_server
-from skillflow.server import Client
-from skillflow.util import canonical, uid
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.harness import live_server
+from skillflow_prompts.server import Client
+from skillflow_prompts.util import canonical, uid
 
 MUTATIONS = {
     "flow_start",
@@ -173,7 +173,7 @@ def test_hard_kill_keeps_history_then_resume_and_deliver(tmp_path):
         command = [
             sys.executable,
             "-m",
-            "skillflow",
+            "skillflow_prompts",
             "status",
             remote.case_id,
             "--url",
@@ -204,7 +204,7 @@ def test_cli_status_reports_non_computable_progress_with_reason(tmp_path):
             [
                 sys.executable,
                 "-m",
-                "skillflow",
+                "skillflow_prompts",
                 "status",
                 remote.case_id,
                 "--url",

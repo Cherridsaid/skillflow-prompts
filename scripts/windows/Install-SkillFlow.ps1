@@ -246,12 +246,12 @@ if ($AppContainerSid) {
         idle_timeout_seconds=60;max_connections=8}
     [IO.File]::WriteAllText((Join-Path $authority 'proxy.json'), ($proxyConfig | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))
 }
-$arguments = '-m skillflow serve --root "' + $authority + '"'
+$arguments = '-m skillflow_prompts serve --root "' + $authority + '"'
 $action = New-ScheduledTaskAction -Execute $runtimePython -Argument $arguments -WorkingDirectory $authority
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -Hidden
 Register-ScheduledTask -TaskName $TaskName -Action $action -Settings $settings -User $service -Password $ServiceCredential.GetNetworkCredential().Password | Out-Null
 if ($AppContainerSid) {
-    $proxyArguments = '-m skillflow network-proxy --config "' + (Join-Path $authority 'proxy.json') + '" --log "' + (Join-Path $state 'proxy.jsonl') + '"'
+    $proxyArguments = '-m skillflow_prompts network-proxy --config "' + (Join-Path $authority 'proxy.json') + '" --log "' + (Join-Path $state 'proxy.jsonl') + '"'
     $proxyAction = New-ScheduledTaskAction -Execute $runtimePython -Argument $proxyArguments -WorkingDirectory $authority
     Register-ScheduledTask -TaskName $ProxyTaskName -Action $proxyAction -Settings $settings -User $service -Password $ServiceCredential.GetNetworkCredential().Password | Out-Null
 }

@@ -3,10 +3,10 @@
 import base64
 from pathlib import Path
 
-from skillflow.bootstrap import create_demo
-from skillflow.core import Controller
-from skillflow.demo import DemoSession
-from skillflow.util import canonical, sha256, strict_json
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.core import Controller
+from skillflow_prompts.demo import DemoSession
+from skillflow_prompts.util import canonical, sha256, strict_json
 
 
 def conversation(tmp_path):

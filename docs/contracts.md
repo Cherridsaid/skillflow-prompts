@@ -8,8 +8,8 @@ extension without core changes. None contains private skill text or real case da
 Validate a contract before an administrator installs it:
 
 ```console
-uv run skillflow validate-contract examples/contracts/editorial.json
-uv run skillflow schemas --output schemas --check
+uv run skillflow-prompts validate-contract examples/contracts/editorial.json
+uv run skillflow-prompts schemas --output schemas --check
 ```
 
 `schema_version` governs the format; `id@version` is its immutable registry key.

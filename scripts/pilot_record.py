@@ -8,10 +8,10 @@ import os
 import time
 from pathlib import Path
 
-from skillflow.benchmarks import validate_trial
-from skillflow.schema_export import validate
-from skillflow.server import Client
-from skillflow.util import canonical, now, sha256, strict_json
+from skillflow_prompts.benchmarks import validate_trial
+from skillflow_prompts.schema_export import validate
+from skillflow_prompts.server import Client
+from skillflow_prompts.util import canonical, now, sha256, strict_json
 
 
 def manifest_version(manifest):

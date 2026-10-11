@@ -541,7 +541,9 @@ class ClientBridge:
         if event.event == "PreToolUse":
             # A positive list avoids pretending shell strings can be safely classified.
             # Persistent terminals and hosted tools remain separate acceptance routes.
-            allowed_mcp = event.tool_name in {"mcp__skillflow__" + name for name in api.WRITER}
+            allowed_mcp = event.tool_name in {
+                "mcp__skillflow-prompts__" + name for name in api.WRITER
+            }
             # Each approved contract names the client tools its own work needs. A tool
             # nobody declared stays out; the refusal says what this case does admit.
             declared = sorted(

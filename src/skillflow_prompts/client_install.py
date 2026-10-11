@@ -145,12 +145,12 @@ def install(client, config_path, *, executable=None, apply=False):
         ]
     server = {
         "command": sys.executable,
-        "args": ["-m", "skillflow", "mcp-client", "--config", str(config_path)],
+        "args": ["-m", "skillflow_prompts", "mcp-client", "--config", str(config_path)],
     }
     if client == "claude":
         allow = data.setdefault("permissions", {}).setdefault("allow", [])
         data["permissions"]["allow"] = sorted(
-            set(allow) | {"mcp__skillflow__" + name for name in WRITER}
+            set(allow) | {"mcp__skillflow-prompts__" + name for name in WRITER}
         )
     report = {
         "client": client,
@@ -174,15 +174,16 @@ def install(client, config_path, *, executable=None, apply=False):
         prior_server = (
             tomllib.loads((home / "config.toml").read_text(encoding="utf-8"))
             .get("mcp_servers", {})
-            .get("skillflow")
+            .get("skillflow-prompts")
         )
         if prior_server:
             args = prior_server.get("args", [])
             owned = (
-                prior_server.get("command") == sys.executable and args[:2] == ["-m", "skillflow"]
+                prior_server.get("command") == sys.executable
+                and args[:2] == ["-m", "skillflow_prompts"]
             ) or (
                 Path(prior_server.get("command", ""))
-                == Path(sys.executable).with_name("skillflow.exe")
+                == Path(sys.executable).with_name("skillflow-prompts.exe")
                 and args[:1] == ["mcp"]
             )
             require(
@@ -193,7 +194,7 @@ def install(client, config_path, *, executable=None, apply=False):
     else:
         user_state = Path.home() / ".claude.json"
         current = (
-            strict_json(user_state.read_bytes()).get("mcpServers", {}).get("skillflow")
+            strict_json(user_state.read_bytes()).get("mcpServers", {}).get("skillflow-prompts")
             if user_state.exists()
             else None
         )
@@ -252,14 +253,18 @@ def install(client, config_path, *, executable=None, apply=False):
             )
             rpc.call(
                 "config/value/write",
-                {"keyPath": "mcp_servers.skillflow", "value": server, "mergeStrategy": "upsert"},
+                {
+                    "keyPath": "mcp_servers.skillflow-prompts",
+                    "value": server,
+                    "mergeStrategy": "upsert",
+                },
             )
         finally:
             rpc.close()
     else:
         require(executable, "CLIENT_INSTALL", "Installed native Claude executable required")
         result = subprocess.run(
-            [executable, "mcp", "get", "skillflow"]
+            [executable, "mcp", "get", "skillflow-prompts"]
             if current
             else [
                 executable,
@@ -267,7 +272,7 @@ def install(client, config_path, *, executable=None, apply=False):
                 "add-json",
                 "--scope",
                 "user",
-                "skillflow",
+                "skillflow-prompts",
                 json.dumps(server),
             ],
             capture_output=True,

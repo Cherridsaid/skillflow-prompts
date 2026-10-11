@@ -1,11 +1,11 @@
 import pytest
 
-from skillflow import collector
-from skillflow.bootstrap import create_demo
-from skillflow.core import Controller
-from skillflow.demo import DemoSession
-from skillflow.models import SourcePolicy
-from skillflow.util import FlowError, canonical, now, sha256, strict_json
+from skillflow_prompts import collector
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.core import Controller
+from skillflow_prompts.demo import DemoSession
+from skillflow_prompts.models import SourcePolicy
+from skillflow_prompts.util import FlowError, canonical, now, sha256, strict_json
 
 
 def source_session(tmp_path):
@@ -77,7 +77,7 @@ def test_changed_and_expired_sources_invalidate_review_and_delivery(tmp_path, mo
     assert session.status()["review"]["valid"] == 0
     session.check()
     session.review()
-    import skillflow.core as core
+    import skillflow_prompts.core as core
 
     clock = now()
     monkeypatch.setattr(core, "now", lambda: clock + 31)

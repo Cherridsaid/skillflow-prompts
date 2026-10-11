@@ -11,8 +11,8 @@ import time
 import zipfile
 from pathlib import Path
 
-from skillflow.util import canonical
-from skillflow.windows_process import RestrictedProcess
+from skillflow_prompts.util import canonical
+from skillflow_prompts.windows_process import RestrictedProcess
 
 
 def set_acl(path, *, public_read=False, public_write=False):
@@ -195,7 +195,9 @@ def run(root):
         "legitimate_observed": (workspace / "legitimate-after").read_text() == "ALLOWED WORKSPACE",
         "code_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "wrapper_sha256": hashlib.sha256(
-            (Path(__file__).resolve().parents[2] / "src/skillflow/windows_process.py").read_bytes()
+            (
+                Path(__file__).resolve().parents[2] / "src/skillflow_prompts/windows_process.py"
+            ).read_bytes()
         ).hexdigest(),
         "runtime_sha256": {
             p.name: hashlib.sha256(p.read_bytes()).hexdigest()

@@ -22,7 +22,16 @@ def live_server(root):
     mutable.mkdir(parents=True, exist_ok=True)
     with (mutable / "server-test.log").open("wb") as log:
         process = subprocess.Popen(
-            [sys.executable, "-m", "skillflow", "serve", "--root", str(root), "--port", str(port)],
+            [
+                sys.executable,
+                "-m",
+                "skillflow_prompts",
+                "serve",
+                "--root",
+                str(root),
+                "--port",
+                str(port),
+            ],
             stdout=log,
             stderr=log,
         )

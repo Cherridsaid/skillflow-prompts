@@ -3,11 +3,11 @@ import json
 import pytest
 
 from scripts.pilot_record import collect, import_trial
-from skillflow.bootstrap import create_demo
-from skillflow.demo import DemoSession
-from skillflow.harness import live_server
-from skillflow.server import Client
-from skillflow.util import canonical, sha256
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.demo import DemoSession
+from skillflow_prompts.harness import live_server
+from skillflow_prompts.server import Client
+from skillflow_prompts.util import canonical, sha256
 
 
 def test_private_collector_resume_keeps_server_budget_and_records_outage(tmp_path):

@@ -28,10 +28,10 @@ foreach ($name in @($record.task,$record.proxy_task)) {
     $expected = Join-Path $target 'runtime\Scripts\python.exe'
     $authority = Join-Path $target 'authority'
     $expectedArguments = if ($name -eq $record.task) {
-        $arguments = '-m skillflow serve --root "' + $authority + '"'
+        $arguments = '-m skillflow_prompts serve --root "' + $authority + '"'
         @($arguments, $arguments + ' --qualification')
     } else {
-        @('-m skillflow network-proxy --config "' + (Join-Path $authority 'proxy.json') + '" --log "' + (Join-Path $target 'state\proxy.jsonl') + '"')
+        @('-m skillflow_prompts network-proxy --config "' + (Join-Path $authority 'proxy.json') + '" --log "' + (Join-Path $target 'state\proxy.jsonl') + '"')
     }
     if ($task.Actions.Count -ne 1 -or [IO.Path]::GetFullPath($task.Actions[0].Execute) -ne $expected -or
         $task.Actions[0].Arguments -notin $expectedArguments -or $task.Actions[0].WorkingDirectory -ne $authority) { throw "Task action ownership mismatch: $name" }

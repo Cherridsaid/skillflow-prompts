@@ -42,7 +42,7 @@ Tests distinguish kernel/adapter effects from Windows permissions and model beha
 Current untested protected paths include persistent client
 terminals, delegated client sessions, ACL denial under a distinct writer account,
 production reviewer authentication and real legal interpretation. They are not
-counted as prevented attacks. See [reception matrix](reception.md).
+counted as prevented attacks.
 
 Native write denials and absent synthetic canary files were observed under the
 recorded client settings. Current-user filesystem probes also demonstrated access

@@ -1,8 +1,8 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from skillflow.benchmarks import run, update_readmes
-from skillflow.reviewer import run_codex_review
+from skillflow_prompts.benchmarks import run, update_readmes
+from skillflow_prompts.reviewer import run_codex_review
 
 
 def test_reviewer_preserves_original_crlf_bytes(monkeypatch):
@@ -16,8 +16,10 @@ def test_reviewer_preserves_original_crlf_bytes(monkeypatch):
         target.write_bytes(raw)
         return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
 
-    monkeypatch.setattr("skillflow.reviewer._run_bounded", execute)
-    monkeypatch.setattr("skillflow.reviewer.shutil.which", lambda name, path=None: "/engine")
+    monkeypatch.setattr("skillflow_prompts.reviewer._run_bounded", execute)
+    monkeypatch.setattr(
+        "skillflow_prompts.reviewer.shutil.which", lambda name, path=None: "/engine"
+    )
     observed = {}
 
     class Client:
@@ -56,9 +58,9 @@ def test_missing_reviewer_engine_is_named_not_inferred(monkeypatch):
     """A reviewer that cannot run is a refusal, never an implicit favorable verdict."""
     import pytest
 
-    from skillflow.util import FlowError
+    from skillflow_prompts.util import FlowError
 
-    monkeypatch.setattr("skillflow.reviewer.shutil.which", lambda name, path=None: None)
+    monkeypatch.setattr("skillflow_prompts.reviewer.shutil.which", lambda name, path=None: None)
 
     class Client:
         def call(self, action, arguments, *_):
@@ -82,8 +84,8 @@ def test_a_reviewer_that_never_answers_is_a_named_refusal(monkeypatch):
 
     import pytest
 
-    from skillflow.reviewer import run_external_review
-    from skillflow.util import FlowError
+    from skillflow_prompts.reviewer import run_external_review
+    from skillflow_prompts.util import FlowError
 
     killed = []
 
@@ -103,10 +105,12 @@ def test_a_reviewer_that_never_answers_is_a_named_refusal(monkeypatch):
         def kill(self):
             killed.append("kill")
 
-    monkeypatch.setattr("skillflow.reviewer.shutil.which", lambda name, path=None: "/engine")
-    monkeypatch.setattr("skillflow.reviewer.subprocess.Popen", lambda *a, **k: Child())
     monkeypatch.setattr(
-        "skillflow.reviewer.subprocess.run", lambda *a, **k: killed.append("taskkill")
+        "skillflow_prompts.reviewer.shutil.which", lambda name, path=None: "/engine"
+    )
+    monkeypatch.setattr("skillflow_prompts.reviewer.subprocess.Popen", lambda *a, **k: Child())
+    monkeypatch.setattr(
+        "skillflow_prompts.reviewer.subprocess.run", lambda *a, **k: killed.append("taskkill")
     )
 
     class Client:

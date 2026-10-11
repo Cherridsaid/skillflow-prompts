@@ -40,7 +40,7 @@ def main():
     parser.add_argument("--repo", type=Path, default=Path("."))
     args = parser.parse_args()
     lock = tomllib.loads((args.repo / "uv.lock").read_text())
-    packages = [p for p in lock["package"] if p["name"] != "skillflow-mcp"]
+    packages = [p for p in lock["package"] if p["name"] != "skillflow-prompts"]
     with ThreadPoolExecutor(max_workers=6) as pool:
         entries = sorted(pool.map(inspect, packages), key=lambda x: x["name"])
     cutoff = datetime(2026, 9, 11, tzinfo=UTC)

@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from skillflow.util import canonical, sha256, strict_json
+from skillflow_prompts.util import canonical, sha256, strict_json
 
 
 def analyze(inventory, output):

@@ -14,14 +14,14 @@ from importlib.resources import files
 
 import pytest
 
-from skillflow.bootstrap import create_demo
-from skillflow.core import Controller
-from skillflow.delivery import drain_outbox
-from skillflow.integration import ClientBridge
-from skillflow.registry import authenticate
-from skillflow.util import canonical, uid
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.core import Controller
+from skillflow_prompts.delivery import drain_outbox
+from skillflow_prompts.integration import ClientBridge
+from skillflow_prompts.registry import authenticate
+from skillflow_prompts.util import canonical, uid
 
-DATA = files("skillflow").joinpath("data")
+DATA = files("skillflow_prompts").joinpath("data")
 NOTE = "SYNTHETIC note, version 1.\nConclusion: synthetic fixture, no legal value."
 
 
@@ -61,7 +61,7 @@ def lab(tmp_path):
 
 
 def call(lab, role, action, arguments, *, expect=True):
-    from skillflow.api import READ
+    from skillflow_prompts.api import READ
 
     request = {"action": action, "arguments": dict(arguments)}
     if action not in READ:

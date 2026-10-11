@@ -11,8 +11,8 @@ import hashlib
 
 import pytest
 
-from skillflow.bootstrap import create_demo
-from skillflow.demo import DemoSession
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.demo import DemoSession
 
 
 @pytest.fixture

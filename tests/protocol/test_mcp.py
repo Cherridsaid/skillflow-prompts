@@ -5,9 +5,9 @@ import sys
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from skillflow.bootstrap import create_demo
-from skillflow.demo import DemoSession
-from skillflow.harness import live_server
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.demo import DemoSession
+from skillflow_prompts.harness import live_server
 
 
 def test_real_stdio_initialize_list_call_and_unknown_tool(tmp_path):
@@ -20,7 +20,7 @@ def test_real_stdio_initialize_list_call_and_unknown_tool(tmp_path):
                 command=sys.executable,
                 args=[
                     "-m",
-                    "skillflow",
+                    "skillflow_prompts",
                     "mcp",
                     "--url",
                     url,
@@ -33,7 +33,7 @@ def test_real_stdio_initialize_list_call_and_unknown_tool(tmp_path):
                 ClientSession(reader, writer) as client,
             ):
                 initialization = await client.initialize()
-                assert initialization.serverInfo.name == "skillflow-mcp"
+                assert initialization.serverInfo.name == "skillflow-prompts"
                 tools = await client.list_tools()
                 assert "flow_status" in {t.name for t in tools.tools}
                 assert "approval_submit" not in {t.name for t in tools.tools}

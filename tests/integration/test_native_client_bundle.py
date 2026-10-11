@@ -4,7 +4,7 @@ import os
 import pytest
 
 from scripts.prepare_native_clients import prepare
-from skillflow.util import sha256
+from skillflow_prompts.util import sha256
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="Windows native client bundle")
 

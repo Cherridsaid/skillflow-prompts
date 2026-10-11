@@ -74,7 +74,7 @@ def deliver(client, case_id, delivery_id, *, wait=30):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="skillflow")
+    parser = argparse.ArgumentParser(prog="skillflow-prompts")
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("init-demo", "demo"):

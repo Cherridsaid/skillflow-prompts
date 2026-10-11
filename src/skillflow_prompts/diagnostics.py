@@ -30,7 +30,7 @@ def diagnose():
         else:
             clients[name] = {"version": None, "interaction_test": "NOT_RUN"}
     packages = {}
-    for name in ("skillflow-mcp", "mcp", "cryptography", "pydantic", "fastapi", "uvicorn"):
+    for name in ("skillflow-prompts", "mcp", "cryptography", "pydantic", "fastapi", "uvicorn"):
         try:
             packages[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:

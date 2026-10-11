@@ -14,9 +14,9 @@ if ($saved.Count -ne 1 -or $saved[0].sid -ne $service.SID.Value -or $service.Des
 $taskSid = ([Security.Principal.NTAccount]::new($task.Principal.UserId)).Translate([Security.Principal.SecurityIdentifier]).Value
 $python = Join-Path $target 'runtime\Scripts\python.exe'
 $authority = Join-Path $target 'authority'
-$arguments = '-m skillflow serve --root "' + (Join-Path $target 'authority') + '"'
+$arguments = '-m skillflow_prompts serve --root "' + (Join-Path $target 'authority') + '"'
 $proxySid = ([Security.Principal.NTAccount]::new($proxyTask.Principal.UserId)).Translate([Security.Principal.SecurityIdentifier]).Value
-$proxyArguments = '-m skillflow network-proxy --config "' + (Join-Path $authority 'proxy.json') + '" --log "' + (Join-Path $target 'state\proxy.jsonl') + '"'
+$proxyArguments = '-m skillflow_prompts network-proxy --config "' + (Join-Path $authority 'proxy.json') + '" --log "' + (Join-Path $target 'state\proxy.jsonl') + '"'
 if ($taskSid -ne $service.SID.Value -or $task.Actions.Count -ne 1 -or $task.Actions[0].Execute -ne $python -or
     $task.Actions[0].Arguments -notin @($arguments, $arguments + ' --qualification') -or $task.Actions[0].WorkingDirectory -ne $authority) { throw 'Task ownership mismatch.' }
 if ($proxySid -ne $service.SID.Value -or $proxyTask.Actions.Count -ne 1 -or $proxyTask.Actions[0].Execute -ne $python -or

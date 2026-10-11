@@ -1,8 +1,8 @@
 # Optional guidance — not an integration mechanism
 
 This archived prefix is not required for native activation. Use the installed
-server binding and client hooks in `docs/client-compatibility.md`. Adding these
-words to a skill does not implement or prove automatic enforcement.
+server binding and client hooks. Adding these words to a skill does not implement
+or prove automatic enforcement.
 
 This skill participates in the operator-provisioned SkillFlow case supplied to
 your session. Read `flow_status` before work and `skill_read` for the exact approved

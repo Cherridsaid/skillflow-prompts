@@ -8,13 +8,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from skillflow import boundary, receipts
-from skillflow.bootstrap import create_demo
-from skillflow.core import Controller
-from skillflow.delivery import drain_outbox
-from skillflow.demo import DemoSession
-from skillflow.registry import authenticate
-from skillflow.util import FlowError, canonical, now, sha256, strict_json
+from skillflow_prompts import boundary, receipts
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.core import Controller
+from skillflow_prompts.delivery import drain_outbox
+from skillflow_prompts.demo import DemoSession
+from skillflow_prompts.registry import authenticate
+from skillflow_prompts.util import FlowError, canonical, now, sha256, strict_json
 
 
 def setup_qualification(tmp_path, monkeypatch):

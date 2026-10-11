@@ -9,10 +9,10 @@ import base64
 
 import pytest
 
-from skillflow.bootstrap import create_demo
-from skillflow.core import REVIEW_INSTRUCTION
-from skillflow.demo import DemoSession
-from skillflow.util import canonical
+from skillflow_prompts.bootstrap import create_demo
+from skillflow_prompts.core import REVIEW_INSTRUCTION
+from skillflow_prompts.demo import DemoSession
+from skillflow_prompts.util import canonical
 
 
 @pytest.fixture

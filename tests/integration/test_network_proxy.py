@@ -7,8 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from skillflow.network_proxy import ProxyConfig, ProxyServer, _addresses, _host, _request, _sni
-from skillflow.util import FlowError
+from skillflow_prompts.network_proxy import (
+    ProxyConfig,
+    ProxyServer,
+    _addresses,
+    _host,
+    _request,
+    _sni,
+)
+from skillflow_prompts.util import FlowError
 
 
 def hello(host, repeat=1):
@@ -139,16 +146,20 @@ def test_proxy_never_forwards_a_different_tls_sni(tmp_path):
     assert b'"outcome":"denied"' in log_path.read_bytes()
 
 
+# One port per case: Linux keeps a closed listening port in TIME_WAIT, and the
+# proxy refuses address reuse, so rebinding the same port right away fails.
 @pytest.mark.parametrize(
-    ("target", "auth", "status"),
+    ("target", "auth", "status", "port"),
     [
-        ("other.example.test", True, b"403"),
-        ("api.example.test", False, b"407"),
+        ("other.example.test", True, b"403", 19001),
+        ("api.example.test", False, b"407", 19007),
         # Unauthenticated callers must not learn which hosts are approved.
-        ("other.example.test", False, b"407"),
+        ("other.example.test", False, b"407", 19008),
     ],
 )
-def test_proxy_denies_unapproved_or_unauthenticated_before_dns(tmp_path, target, auth, status):
+def test_proxy_denies_unapproved_or_unauthenticated_before_dns(
+    tmp_path, target, auth, status, port
+):
     calls = []
 
     def resolver(*value):
@@ -157,7 +168,7 @@ def test_proxy_denies_unapproved_or_unauthenticated_before_dns(tmp_path, target,
 
     config = ProxyConfig(
         format="skillflow-egress-proxy-v1",
-        listen_port=19001,
+        listen_port=port,
         credential_file=str(Path(tmp_path) / "unused"),
         allowed_hosts=["api.example.test"],
         connect_timeout_seconds=2,

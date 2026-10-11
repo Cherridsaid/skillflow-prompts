@@ -11,9 +11,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from skillflow.catalog import inventory_entry, unique_entries
-from skillflow.client_install import CodexConfig
-from skillflow.util import canonical, now, sha256
+from skillflow_prompts.catalog import inventory_entry, unique_entries
+from skillflow_prompts.client_install import CodexConfig
+from skillflow_prompts.util import canonical, now, sha256
 
 
 def discover(home, workspace, codex_result):

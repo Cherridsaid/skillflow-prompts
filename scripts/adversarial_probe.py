@@ -14,9 +14,9 @@ from pathlib import Path
 
 import httpx
 
-from skillflow.bootstrap import prepare_client_demo
-from skillflow.harness import live_server
-from skillflow.util import canonical, sha256
+from skillflow_prompts.bootstrap import prepare_client_demo
+from skillflow_prompts.harness import live_server
+from skillflow_prompts.util import canonical, sha256
 
 
 def probe(output, name):
@@ -73,7 +73,7 @@ def probe(output, name):
                 "session_id": "writer-forged-session",
                 "event": "PreToolUse",
                 "event_id": "forged-1",
-                "tool_name": "mcp__skillflow__artifact_submit",
+                "tool_name": "mcp__skillflow-prompts__artifact_submit",
                 "tool_input": {},
             },
         )
