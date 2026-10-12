@@ -33,6 +33,12 @@ from .util import FlowError, canonical, sha256, strict_json, uid
 
 STATE = "chatgpt.json"
 CLIENT = "chatgpt"
+BOM = b"\xef\xbb\xbf"
+# A file written again is longer than the bytes a receipt holds: one more byte per line
+# end, three for a byte order mark, and at most three times its size once decomposed —
+# measured over every codepoint, U+0390 and the Hangul syllables reaching exactly 3. Past
+# this ceiling a file cannot be the attested answer written again, whatever it holds.
+MAX_REWRITTEN_FACTOR = 3
 TERMINAL = ("DELIVERED", "COMPLETED", "CANCELLED")
 MAX_INPUT = 1_000_000
 # A receipt embeds the prompt, the contract and the snapshot: several copies plus base64.
@@ -770,6 +776,18 @@ def render(payload):
             f"Réponse contrôlée : answer.txt, sha256 {token(payload['answer_sha256'])[:16]}…, "
             f"{payload['answer_words']} mots, commence par « {cell(payload['answer_start'], 60)} », "
             f"finit par « {cell(payload['answer_end'], 60)} ».",
+            # When the file read is not the receipted bytes, the receipt shown says so
+            # itself: it is the only artefact a reader is asked to read.
+            *(
+                [
+                    "Le fichier relu n'est PAS octet pour octet celui du reçu : son sha256 est "
+                    f"{token(payload['answer_read_sha256'])[:16]}…. Il redonne le texte attesté "
+                    "après normalisation (marque d'ordre des octets, fins de ligne Windows, "
+                    "composition Unicode), et c'est sur le texte attesté que tout est recalculé."
+                ]
+                if payload.get("answer_read_sha256")
+                else []
+            ),
             f"Prompt : sha256 {token(payload['prompt_sha256'])[:16]}…. "
             f"Contrat : {token(payload['contracts'][0]['ref'])} (compilé par : "
             f"{token(payload['contracts'][0]['compiled_by'])}).",
@@ -784,6 +802,20 @@ def render(payload):
             SCOPE,
         ]
     )
+
+
+def rewritten(data):
+    """The same text, read back the way a text editor saves it on its own.
+
+    Deliberately narrower than `prompts.normalize`: a leading byte order mark, Windows
+    line ends and Unicode composition are what an editor changes by itself, and none of
+    them changes what a reader sees. A lone carriage return is not one of them. Windows
+    writes CRLF, and a bare CR sends the cursor back to the start of the line in a
+    terminal, so the line before it disappears from the display: a file holding one does
+    not show the attested text, and it stays refused.
+    """
+    text = data.removeprefix(BOM).replace(b"\r\n", b"\n").decode("utf-8")
+    return unicodedata.normalize("NFC", text).encode("utf-8")
 
 
 def action_verify(args):
@@ -801,7 +833,10 @@ def action_verify(args):
             "The receipt signature does not match its content",
             "The receipt was edited or is not a skillflow-prompts receipt",
         ) from exc
-    answer = read_input(args.answer)
+    # Read past the limit of what a receipt can hold, by the measured ceiling of a
+    # rewriting, then let the comparison below decide. The normalized form is bounded by
+    # the receipted bytes, so nothing larger is admitted by reading further.
+    answer = read_input(args.answer, MAX_REWRITTEN_FACTOR * MAX_INPUT + len(BOM))
     try:
         return verify_payload(args, payload, public, answer)
     except (AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
@@ -817,20 +852,27 @@ def verify_payload(args, payload, public, answer):
     checks = {"signature": True}
     if payload.get("kind") != "skillflow-prompts-receipt-v1":
         raise Refusal("RECEIPT_KIND", "Not a skillflow-prompts receipt")
+    read_sha256 = None
     checks["answer"] = sha256(answer) == payload["answer_sha256"]
     if not checks["answer"]:
-        same = False
+        # Written again by an editor, the same answer is the same answer. It is accepted
+        # under its own name, "normalized", never silently: the digest of the file as read
+        # goes into the receipt shown, so a reader sees that the bytes are not the
+        # receipted ones. The normalized bytes then replace the ones read, so every figure
+        # below is recomputed from exactly what the receipt attests.
+        same = None
         try:
-            same = sha256(prompts.normalize(answer)) == payload["answer_sha256"]
+            same = rewritten(answer)
         except UnicodeDecodeError:
             pass
-        raise Refusal(
-            "ANSWER_CHANGED",
-            "The answer file differs from the receipted bytes",
-            "Only line ends or Unicode composition differ; use answer.txt from the receipt"
-            if same
-            else "Use the answer.txt delivered with this receipt",
-        )
+        if same is not None and sha256(same) == payload["answer_sha256"]:
+            checks["answer"], read_sha256, answer = "normalized", sha256(answer), same
+        else:
+            raise Refusal(
+                "ANSWER_CHANGED",
+                "The answer file differs from the receipted bytes",
+                "Use the answer.txt delivered with this receipt",
+            )
     stated = {c["sha256"] for c in payload["contracts"]}
     for path in args.contract or []:
         if sha256(canonical(strict_json(read_input(path, MAX_RECEIPT)))) not in stated:
@@ -934,6 +976,7 @@ def verify_payload(args, payload, public, answer):
             }
             for role, compiled in compilations
         ],
+        answer_read_sha256=read_sha256,
         **recomputed_meta,
     )
     return (0 if ok else 1), {
@@ -946,7 +989,14 @@ def verify_payload(args, payload, public, answer):
             "Reçu vérifié, statuts mécaniques recalculés. " if ok else "Vérification échouée. "
         )
         + key_text
-        + ".",
+        + "."
+        + (
+            " Le fichier de réponse relu n'est pas octet pour octet celui du reçu : il "
+            "redonne le texte attesté après normalisation, marque d'ordre des octets, fins "
+            "de ligne Windows ou composition Unicode. Son empreinte est dans le reçu affiché."
+            if checks["answer"] == "normalized"
+            else ""
+        ),
     }
 
 

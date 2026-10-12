@@ -1,16 +1,19 @@
 """The ChatGPT launcher run exactly as ChatGPT runs it: every step is a separate process."""
 
 import base64
+import codecs
 import json
 import os
 import subprocess
 import sys
+import unicodedata
 from io import BytesIO
 from pathlib import Path
 
 import pytest
 
-from skillflow_prompts.util import canonical
+from skillflow_prompts.chatgpt import MAX_REWRITTEN_FACTOR
+from skillflow_prompts.util import canonical, sha256
 
 PROMPT = (
     "Réponds en 40 mots maximum.\n"
@@ -19,6 +22,8 @@ PROMPT = (
 )
 WRONG = "Voici une réponse courte qui oublie le nom de l'outil. Elle reste brève. Et toi ?"
 RIGHT = "SkillFlow contrôle chaque consigne mesurable avant la remise. Elle reste brève. Et toi ?"
+# An answer written on several lines: only then do line ends exist to be changed.
+LINES = "SkillFlow contrôle chaque consigne mesurable.\nElle reste brève.\nEt toi ?"
 
 
 def chatgpt(*args):
@@ -642,3 +647,148 @@ def test_usage_errors_are_one_json_object_with_exit_code_2(tmp_path):
     assert code == 2 and unreadable["error"]["code"] == "INPUT_UNREADABLE"
     code, helped = chatgpt("--help")
     assert code == 0 and "init" in helped["usage"]
+
+
+def test_verify_accepts_the_same_answer_written_again_and_says_so(tmp_path):
+    """What an editor changes on its own is not another answer: line ends, composition, BOM.
+
+    The file is accepted under its own name, `normalized`, and said in the summary. Every
+    figure of the receipt is then recomputed from the normalized bytes, so the receipt
+    shown is word for word the one a strict reading gives. Any other byte still fails.
+    """
+    root = tmp_path / "state"
+    prompt, answer = scenario_files(tmp_path)
+    assert chatgpt("init", "--root", root)[0] == 0
+    assert chatgpt("prompt", "--root", root, "--file", prompt)[0] == 0
+    answer.write_text(LINES, encoding="utf-8")
+    code, accepted = chatgpt("answer", "--root", root, "--file", answer)
+    assert code == 0, accepted
+    code, delivered = chatgpt("deliver", "--root", root)
+    assert code == 0, delivered
+    folder = Path(delivered["receipt_folder"])
+    receipt, receipted = folder / "receipt.json", folder / "answer.txt"
+    raw = receipted.read_bytes()
+    # The receipted bytes are the normalized ones: that is what makes the rest decidable.
+    assert b"\r" not in raw and raw == unicodedata.normalize("NFC", raw.decode("utf-8")).encode()
+    code, strict = chatgpt("verify", "--receipt", receipt, "--answer", receipted, "--root", root)
+    assert code == 0 and strict["checks"]["answer"] is True
+    assert "normalisation" not in strict["summary"]
+
+    written_again = {
+        "fins de ligne Windows": raw.replace(b"\n", b"\r\n"),
+        "composition decomposee": unicodedata.normalize("NFD", raw.decode("utf-8")).encode(),
+        "marque d ordre des octets": codecs.BOM_UTF8 + raw,
+    }
+    again = tmp_path / "again.txt"
+    # The line that states what is attested: digest, word count, first and last words.
+    attested = next(
+        line for line in strict["receipt"].split("\n") if line.startswith("Réponse contrôlée")
+    )
+    for name, data in written_again.items():
+        assert data != raw, name
+        again.write_bytes(data)
+        code, same = chatgpt("verify", "--receipt", receipt, "--answer", again, "--root", root)
+        assert code == 0, (name, same)
+        assert same["checks"]["answer"] == "normalized", name
+        # The receipt shown is the only artefact a reader is asked to read: it must say
+        # itself that these bytes are not the receipted ones, and name their digest.
+        assert same["receipt"] != strict["receipt"], name
+        assert "n'est PAS octet pour octet" in same["receipt"], name
+        assert sha256(data)[:16] in same["receipt"], name
+        assert "normalisation" in same["summary"], name
+        # What is counted and classified comes from the attested text, never from the file.
+        assert same["counts"] == strict["counts"], name
+        assert attested in same["receipt"], name
+
+    broken = tmp_path / "broken.txt"
+    for name, data in {
+        "un espace ajoute": raw + b" ",
+        "une lettre changee": raw.replace(b"SkillFlow", b"SkillFlo0"),
+        "des octets qui ne sont pas de l UTF-8": raw + b"\xff",
+        # A lone carriage return is not what an editor writes, and it hides the line
+        # before it in a terminal: the file would not show the attested text.
+        "un retour chariot seul": raw.replace(b"\n", b"\r"),
+        "deux marques d ordre des octets": codecs.BOM_UTF8 * 2 + raw,
+    }.items():
+        assert data != raw, name
+        broken.write_bytes(data)
+        code, refused = chatgpt("verify", "--receipt", receipt, "--answer", broken, "--root", root)
+        assert code == 1, (name, refused)
+        assert refused["error"]["code"] == "ANSWER_CHANGED", name
+
+
+def test_an_answer_at_the_size_limit_can_still_be_written_again(tmp_path):
+    """Converting line ends makes a file longer: the largest answer must survive that.
+
+    Without this, the one case the relaxation exists for fails on the size of the file
+    instead of its content, at the exact boundary `deliver` is allowed to produce.
+    """
+    root = tmp_path / "state"
+    prompt, answer = scenario_files(tmp_path)
+    prompt.write_text("Recopie le texte que je te donne.\n", encoding="utf-8")
+    assert chatgpt("init", "--root", root)[0] == 0
+    code, compiled = chatgpt("prompt", "--root", root, "--file", prompt)
+    assert code == 0, compiled
+    # One million bytes exactly, the limit read_input accepts, with line ends to convert.
+    body = ("mot " * 24 + "\n") * 11_000
+    answer.write_bytes(body[:1_000_000].encode("utf-8"))
+    code, accepted = chatgpt("answer", "--root", root, "--file", answer)
+    assert code == 0, accepted
+    code, delivered = chatgpt("deliver", "--root", root)
+    assert code == 0, delivered
+    folder = Path(delivered["receipt_folder"])
+    receipt, receipted = folder / "receipt.json", folder / "answer.txt"
+    raw = receipted.read_bytes()
+    assert len(raw) == 1_000_000
+    windows = tmp_path / "windows.txt"
+    windows.write_bytes(raw.replace(b"\n", b"\r\n"))
+    assert windows.stat().st_size > 1_000_000
+    code, same = chatgpt("verify", "--receipt", receipt, "--answer", windows, "--root", root)
+    assert code == 0, same
+    assert same["checks"]["answer"] == "normalized"
+
+
+def test_the_largest_answer_survives_being_decomposed(tmp_path):
+    """Decomposing is the costliest rewriting: three bytes for one, measured.
+
+    A ceiling set on line ends alone refuses the attested answer itself, with an error
+    about the size of a file instead of its content.
+    """
+    root = tmp_path / "state"
+    prompt, answer = scenario_files(tmp_path)
+    prompt.write_text("Recopie le texte que je te donne.\n", encoding="utf-8")
+    assert chatgpt("init", "--root", root)[0] == 0
+    assert chatgpt("prompt", "--root", root, "--file", prompt)[0] == 0
+    # Hangul syllables: three bytes composed, nine decomposed. Kept in short words so the
+    # receipt does not carry one enormous one.
+    text = ("각" * 50 + " ") * 6_622 + "x" * 78
+    answer.write_bytes(text.encode("utf-8"))
+    assert len(text.encode("utf-8")) == 1_000_000
+    code, accepted = chatgpt("answer", "--root", root, "--file", answer)
+    assert code == 0, accepted
+    code, delivered = chatgpt("deliver", "--root", root)
+    assert code == 0, delivered
+    folder = Path(delivered["receipt_folder"])
+    receipt = folder / "receipt.json"
+    decomposed = tmp_path / "decomposed.txt"
+    data = unicodedata.normalize("NFD", text).encode("utf-8")
+    decomposed.write_bytes(data)
+    assert len(data) > 2 * 1_000_000
+    code, same = chatgpt("verify", "--receipt", receipt, "--answer", decomposed, "--root", root)
+    assert code == 0, same
+    assert same["checks"]["answer"] == "normalized"
+
+
+def test_no_codepoint_decomposes_past_the_ceiling_the_launcher_reads_to():
+    """The ceiling is a measurement, not a guess: every codepoint is checked against it."""
+    worst = 1
+    for point in range(0x110000):
+        character = chr(point)
+        if unicodedata.category(character) == "Cs":
+            continue
+        if unicodedata.normalize("NFC", character) != character:
+            continue
+        decomposed = unicodedata.normalize("NFD", character)
+        worst = max(worst, len(decomposed.encode("utf-8")) / len(character.encode("utf-8")))
+    assert worst == 3
+    assert MAX_REWRITTEN_FACTOR >= worst
