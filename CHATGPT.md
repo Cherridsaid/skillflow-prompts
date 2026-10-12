@@ -1,24 +1,66 @@
 # Consigne à coller dans ChatGPT (mode Travailler) — variante zip
 
 Tu vas faire tourner un outil local, `skillflow-prompts`, qui transforme un prompt en
-contrat, contrôle ta réponse contre ce contrat, n'accepte des corrections que sur les
-obligations rejetées, et rend un reçu signé. Tu l'exécutes dans ton bac à sable. Suis
-exactement les étapes ci-dessous et montre-moi la sortie de chaque commande.
+contrat, contrôle ta réponse contre ce contrat, nomme les obligations qu'il rejette, et
+rend un reçu signé. Ne corriger que ce qui a été rejeté est une consigne que je te donne,
+pas une contrainte que l'outil impose. Tu l'exécutes dans ton bac à sable. Suis exactement
+les étapes ci-dessous et montre-moi la sortie de chaque commande.
 
 ## 1. Installer, une seule fois
 
 Un zip du dépôt est joint à ce message. Décompresse-le, puis installe les dépendances
-verrouillées. Remplace `<DOSSIER>` par le chemin **absolu** du dossier obtenu.
+verrouillées.
+
+Deux chemins, posés **une seule fois** et réutilisés tels quels partout ensuite :
+
+- `<DOSSIER>` : le chemin **absolu** du dossier obtenu en décompressant.
+- `<ROOT>` : **toujours** `<DOSSIER>/travail`. C'est l'état sur disque, et c'est le même à
+  chaque commande.
 
 ```bash
 cd <DOSSIER>
 uv sync --locked
-uv run --no-sync python -m skillflow_prompts chatgpt init --root <DOSSIER>/travail
+uv run --no-sync python -m skillflow_prompts chatgpt init --root <ROOT>
 ```
 
-`init` crée l'état sur disque. Si `uv sync --locked` échoue, **arrête-toi** et donne-moi
-l'erreur telle quelle : l'outil ne peut pas démarrer sans ses dépendances, et je ne veux
-pas d'un contournement qui installerait autre chose que le verrou.
+`init` crée l'état sur disque et affiche un `key_id`. **Donne-moi ce `key_id`** : c'est la
+seule façon pour moi d'ancrer la clé autrement qu'avec un fichier venu du même zip.
+
+Si `uv sync --locked` échoue, **arrête-toi** et donne-moi l'erreur telle quelle : l'outil
+ne peut pas démarrer sans ses dépendances, et je ne veux pas d'un contournement qui
+installerait autre chose que le verrou.
+
+### Essai d'une minute, tout de suite après `init`
+
+N'attends pas un vrai prompt de ma part pour savoir si l'installation marche. Écris deux
+fichiers avec **exactement** ce contenu.
+
+`essai.txt` :
+
+```text
+Réponds en 12 mots maximum.
+Mentionne « SkillFlow ».
+```
+
+`essai-reponse.txt` :
+
+```text
+SkillFlow fonctionne.
+```
+
+Puis lance les trois commandes :
+
+```bash
+uv run --no-sync python -m skillflow_prompts chatgpt prompt --root <ROOT> --file essai.txt
+uv run --no-sync python -m skillflow_prompts chatgpt answer --root <ROOT> --file essai-reponse.txt
+uv run --no-sync python -m skillflow_prompts chatgpt deliver --root <ROOT>
+```
+
+Ce que tu dois obtenir, et que je veux voir : `prompt` donne **deux** obligations
+mécaniques, une limite de mots et un terme requis ; `answer` rend le code 0 avec
+`VERIFIE: 2` et `REJETE: 0` ; `deliver` rend le code 0 et un dossier de reçu qui contient
+`answer.txt`, `prompt.txt`, `receipt.json` et `RECU.md`. Si l'un des trois diffère,
+arrête-toi et donne-moi la sortie : c'est l'installation qui est en cause, pas le prompt.
 
 ## 2. La règle du bac à sable
 
@@ -73,6 +115,10 @@ Le dossier de reçu contient `answer.txt`, `prompt.txt`, `receipt.json` et `RECU
 
 1. **Recopie `answer.txt` à l'identique** dans ta réponse. C'est le texte contrôlé.
 2. Puis colle `RECU.md` tel quel, sans le résumer.
+3. **Donne-moi `receipt.json`, `answer.txt` et `prompt.txt` en fichiers téléchargeables**,
+   pas recopiés dans le chat. Le chat reformate, et une seule espace changée fait échouer
+   la vérification chez moi. Ces trois fichiers sont ce que je rejoue ; le texte collé
+   n'est que pour la lecture.
 
 Le reçu couvre `answer.txt`, **pas** le texte que tu affiches dans le chat. Si tu écris
 autre chose à côté, le reçu ne le couvre pas, et c'est pour ça que je lis les deux.
@@ -83,8 +129,7 @@ Je peux tout recalculer sur ma machine, sans te faire confiance :
 
 ```bash
 uv run --no-sync python -m skillflow_prompts chatgpt verify \
-  --receipt <DOSSIER_RECU>/receipt.json --answer <DOSSIER_RECU>/answer.txt \
-  --prompt <DOSSIER_RECU>/prompt.txt --root <ROOT>
+  --receipt receipt.json --answer answer.txt --prompt prompt.txt
 ```
 
 `verify` recompile le prompt et recalcule chaque statut au lieu de relire le reçu. Si mon
@@ -99,11 +144,12 @@ valoir `null`, ce qui veut dire « inconnu », pas « faux ». Si `same_code` es
 résumé le dit en clair : les statuts ont été recalculés par un autre code de vérificateurs
 que celui qui les a écrits.
 
-Une mise en garde sur la clé. Avec `--root <ROOT>`, l'ancre vient du bac à sable qui a
-produit le reçu : `checks.key_anchored` vaut `true` et la sortie écrit « clé ancrée », ce
-qui ne prouve **rien** sur la provenance. Pour une ancre qui ne vienne pas du zip, je
-relève le `key_id` affiché par `init` par un autre canal, et je passe `--key-id <valeur>`
-au lieu de `--root`.
+La commande ci-dessus n'a **pas** de `--root`, exprès. Avec `--root`, l'ancre de la clé
+viendrait du bac à sable qui a produit le reçu, `checks.key_anchored` vaudrait `true` et la
+sortie écrirait « clé ancrée » sans rien prouver sur la provenance. Sans `--root`,
+`key_anchored` vaut `null` et la sortie dit « clé non ancrée » : c'est l'état honnête, et
+tout le reste est quand même recalculé. Pour une ancre qui ne vienne pas du zip, j'utilise
+le `key_id` que tu m'as donné à l'étape 1, avec `--key-id <valeur>`.
 
 ## 6. Ce que cet outil ne prouve pas
 

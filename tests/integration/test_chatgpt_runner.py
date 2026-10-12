@@ -24,6 +24,9 @@ WRONG = "Voici une réponse courte qui oublie le nom de l'outil. Elle reste brè
 RIGHT = "SkillFlow contrôle chaque consigne mesurable avant la remise. Elle reste brève. Et toi ?"
 # An answer written on several lines: only then do line ends exist to be changed.
 LINES = "SkillFlow contrôle chaque consigne mesurable.\nElle reste brève.\nEt toi ?"
+# The one-minute trial CHATGPT.md asks for right after `init`, word for word.
+TRIAL_PROMPT = "Réponds en 12 mots maximum.\nMentionne « SkillFlow ».\n"
+TRIAL_ANSWER = "SkillFlow fonctionne.\n"
 
 
 def chatgpt(*args):
@@ -777,6 +780,46 @@ def test_the_largest_answer_survives_being_decomposed(tmp_path):
     code, same = chatgpt("verify", "--receipt", receipt, "--answer", decomposed, "--root", root)
     assert code == 0, same
     assert same["checks"]["answer"] is True and same["answer_rewritten"] is True
+
+
+def test_the_one_minute_trial_of_chatgpt_md_runs_exactly_as_written(tmp_path):
+    """The document promises a trial that proves the install: here it is, really run.
+
+    Its two file contents are checked against `CHATGPT.md` itself, so the document and
+    this test cannot drift apart: change one without the other and this fails. A document
+    that describes a trial nobody replayed is a promise, and this project does not ship
+    promises.
+    """
+    document = (Path(__file__).resolve().parents[2] / "CHATGPT.md").read_text(encoding="utf-8")
+    assert TRIAL_PROMPT.strip() in document
+    assert TRIAL_ANSWER.strip() in document
+
+    root = tmp_path / "travail"
+    prompt, answer = tmp_path / "essai.txt", tmp_path / "essai-reponse.txt"
+    prompt.write_text(TRIAL_PROMPT, encoding="utf-8")
+    answer.write_text(TRIAL_ANSWER, encoding="utf-8")
+    code, created = chatgpt("init", "--root", root)
+    assert code == 0 and created["key_id"], created
+    code, compiled = chatgpt("prompt", "--root", root, "--file", prompt)
+    assert code == 0, compiled
+    assert [row["kind"] for row in compiled["units"]] == ["mechanical", "mechanical"], compiled
+    code, accepted = chatgpt("answer", "--root", root, "--file", answer)
+    assert code == 0, accepted
+    assert accepted["counts"]["VERIFIE"] == 2 and accepted["counts"]["REJETE"] == 0, accepted
+    code, delivered = chatgpt("deliver", "--root", root)
+    assert code == 0, delivered
+    folder = Path(delivered["receipt_folder"])
+    assert {"answer.txt", "prompt.txt", "receipt.json", "RECU.md"} <= set(delivered["files"])
+    # The verification the document asks me to run at home: no --root, so no anchor that
+    # travelled in the same zip as the receipt.
+    code, verified = chatgpt(
+        "verify", "--receipt", folder / "receipt.json", "--answer", folder / "answer.txt",
+        "--prompt", folder / "prompt.txt",
+    )  # fmt: skip
+    assert code == 0, verified
+    assert verified["checks"]["key_anchored"] is None
+    assert verified["checks"]["prompt_file"] is True
+    assert "non ancrée" in verified["summary"]
 
 
 def test_an_unreadable_file_of_mine_is_not_blamed_on_the_receipt(tmp_path):

@@ -11,6 +11,7 @@ import pytest
 from skillflow_prompts.core import Controller
 from skillflow_prompts.harness import live_server
 from skillflow_prompts.util import canonical, sha256, strict_json
+from tests.elevation import ELEVATED, REASON
 from tests.integration.test_conversation import conversation
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="Windows process boundary required")
@@ -100,6 +101,7 @@ def write_launch(tmp_path, launch, session, url):
     return manifest
 
 
+@pytest.mark.skipif(ELEVATED, reason=REASON)
 def test_unfinished_and_outage_never_release_or_spawn_unadmitted_process(tmp_path):
     from skillflow_prompts.controlled_entry import run
 
@@ -116,6 +118,7 @@ def test_unfinished_and_outage_never_release_or_spawn_unadmitted_process(tmp_pat
     assert not (tmp_path / "outage/native-output.bin").exists()
 
 
+@pytest.mark.skipif(ELEVATED, reason=REASON)
 def test_completed_entry_returns_only_exact_authority_message(tmp_path):
     from skillflow_prompts.controlled_entry import run
 
@@ -142,6 +145,7 @@ def test_completed_entry_returns_only_exact_authority_message(tmp_path):
     assert not (session.root / "outbox").exists()
 
 
+@pytest.mark.skipif(ELEVATED, reason=REASON)
 def test_client_which_never_reads_stdin_cannot_escape_timeout(tmp_path):
     from skillflow_prompts.controlled_entry import run
 
@@ -156,6 +160,7 @@ def test_client_which_never_reads_stdin_cannot_escape_timeout(tmp_path):
     assert not result["natural_parent_exit"] and result["authority_result"] is None
 
 
+@pytest.mark.skipif(ELEVATED, reason=REASON)
 @pytest.mark.parametrize("interruption", ["cancel", "pause", "authority-outage"])
 def test_interruption_ends_actual_process_and_retains_output(tmp_path, interruption):
     import win32api

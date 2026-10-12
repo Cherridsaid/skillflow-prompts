@@ -9,6 +9,7 @@ import pytest
 
 from skillflow_prompts.bootstrap import create_demo
 from skillflow_prompts.util import canonical, sha256, strict_json
+from tests.elevation import ELEVATED, REASON
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="Windows network preparation")
 
@@ -25,6 +26,7 @@ def powershell(script):
     )
 
 
+@pytest.mark.skipif(ELEVATED, reason=REASON)
 def test_appcontainer_and_network_scripts_parse_and_plan_without_changes(tmp_path):
     root = Path(__file__).resolve().parents[2]
     profile = root / "scripts/windows/Manage-SkillFlowAppContainer.ps1"

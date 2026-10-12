@@ -5,7 +5,10 @@ import sys
 
 import pytest
 
+from tests.elevation import ELEVATED, REASON
 
+
+@pytest.mark.skipif(ELEVATED, reason=REASON)
 @pytest.mark.skipif(os.name != "nt", reason="Windows restricted token and NTFS required")
 def test_restricted_writer_cannot_access_authority_or_escape_in_child(tmp_path):
     from scripts.windows.restricted_probe import run
@@ -17,6 +20,7 @@ def test_restricted_writer_cannot_access_authority_or_escape_in_child(tmp_path):
     assert not result["job_descendant_effect"]
 
 
+@pytest.mark.skipif(ELEVATED, reason=REASON)
 @pytest.mark.skipif(os.name != "nt", reason="Windows restricted process required")
 def test_invalid_launch_never_falls_back_to_unrestricted_process(tmp_path):
     from skillflow_prompts.util import FlowError
@@ -39,6 +43,7 @@ def test_invalid_launch_never_falls_back_to_unrestricted_process(tmp_path):
     assert not target.exists()
 
 
+@pytest.mark.skipif(ELEVATED, reason=REASON)
 @pytest.mark.skipif(os.name != "nt", reason="Windows restricted process required")
 def test_restricted_process_reports_the_token_it_actually_carries(tmp_path):
     from scripts.windows.restricted_probe import prepare_python, set_acl

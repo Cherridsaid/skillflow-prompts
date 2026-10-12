@@ -64,8 +64,20 @@ def test_chatgpt_md_carries_the_steps_a_new_conversation_needs():
         "retour chariot seul",
         # An anchor that travels in the same zip as the receipt proves nothing.
         "--key-id",
+        # The state root is named once and reused, never improvised per command.
+        "<DOSSIER>/travail",
+        # The install is proven by a trial, not announced.
+        "Essai d'une minute",
+        # Three files are handed over, not retyped into a chat that reformats.
+        "téléchargeables",
+        # The verification run at home carries no anchor from the same zip.
+        "--receipt receipt.json --answer answer.txt --prompt prompt.txt",
+        "non ancrée",
     ):
         assert step in text, step
+    # The same guarantee the READMEs never claim: the tool does not lock the loop.
+    assert "consigne que je te donne" in text
+    assert "n'accepte des corrections que sur les" not in text
     # The limits are part of the instructions, not a footnote to drop.
     assert "fictive" in text
     assert "answer.txt" in text
