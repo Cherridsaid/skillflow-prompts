@@ -163,7 +163,7 @@ class Controller:
                 and auto.get("principals")
                 and set(auto["principals"]) <= writers
                 and auto.get("unmanaged", "observe") in ("observe", "deny")
-                and set(auto.get("clients", ["codex", "claude"])) <= {"codex", "claude"},
+                and set(auto.get("clients", ["codex", "claude"])) <= {"codex", "claude", "chatgpt"},
                 "CONFIG",
                 "Automatic admission needs writer principals and a valid unmanaged policy",
             )

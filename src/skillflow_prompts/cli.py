@@ -74,9 +74,18 @@ def deliver(client, case_id, delivery_id, *, wait=30):
 
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["chatgpt"]:
+        # The ChatGPT launcher owns its arguments and always answers with one JSON object.
+        from .chatgpt import main as chatgpt_main
+
+        return chatgpt_main(argv[1:])
     parser = argparse.ArgumentParser(prog="skillflow-prompts")
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser(
+        "chatgpt", help="ChatGPT launcher: one command, one process (see chatgpt --help)"
+    )
     for name in ("init-demo", "demo"):
         item = commands.add_parser(name)
         if name == "init-demo":

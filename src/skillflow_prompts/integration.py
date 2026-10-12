@@ -19,7 +19,7 @@ from .util import FlowError, canonical, require, sha256, strict_json
 
 class ClientEvent(Strict):
     binding: str = Field(min_length=1, max_length=128)
-    client: Literal["codex", "claude"]
+    client: Literal["codex", "claude", "chatgpt"]
     session_id: str = Field(min_length=1, max_length=128)
     event: Literal[
         "SessionStart",
@@ -87,7 +87,9 @@ def validate_binding(controller, binding, scopes=None, *, dynamic=False):
     """One binding, static or created at admission: the same invariants either way."""
     scopes = set() if scopes is None else scopes
     if True:
-        require(binding["client"] in ("codex", "claude"), "CLIENT_CONFIG", "Unknown client")
+        require(
+            binding["client"] in ("codex", "claude", "chatgpt"), "CLIENT_CONFIG", "Unknown client"
+        )
         key = binding["case_key"]
         profile = controller.config["case_bindings"].get(key)
         require(profile, "CLIENT_CONFIG", "Binding needs an operator-provisioned case")
@@ -249,7 +251,11 @@ class ClientBridge:
         # The workspace copy wins; a skill installed at user level (the ordinary case for a
         # personal catalogue) is found next. Absent everywhere, the workspace path is
         # returned so the refusal still names the workspace.
-        catalogs = [".agents", ".codex"] if client == "codex" else [".claude"]
+        # ChatGPT has its own catalogue: a prompt stored as a skill never mixes with the
+        # skills of Claude Code or Codex.
+        catalogs = {"codex": [".agents", ".codex"], "chatgpt": [".chatgpt"]}.get(
+            client, [".claude"]
+        )
         candidates = [Path(cwd).resolve() / catalogs[0] / "skills" / name / "SKILL.md"]
         candidates += [Path.home() / c / "skills" / name / "SKILL.md" for c in catalogs]
         for candidate in candidates:
