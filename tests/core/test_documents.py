@@ -56,7 +56,10 @@ def test_chatgpt_md_carries_the_steps_a_new_conversation_needs():
         "NON_VERIFIE",
         "BUDGET_EXHAUSTED",
         "NO_PROMPT",
-        "normalized",
+        "answer_rewritten",
+        # A check is a verdict, and the unknown anchor is not a false one.
+        "key_anchored",
+        "same_code",
         # A lone carriage return is refused, and the reader must know it.
         "retour chariot seul",
         # An anchor that travels in the same zip as the receipt proves nothing.

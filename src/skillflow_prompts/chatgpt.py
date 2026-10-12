@@ -38,6 +38,9 @@ BOM = b"\xef\xbb\xbf"
 # end, three for a byte order mark, and at most three times its size once decomposed —
 # measured over every codepoint, U+0390 and the Hangul syllables reaching exactly 3. Past
 # this ceiling a file cannot be the attested answer written again, whatever it holds.
+# This factor bounds exactly the transformations `rewritten` undoes, and nothing else:
+# adding one there without raising this is how the ceiling breaks in silence. The test
+# `test_no_codepoint_decomposes_past_the_ceiling_the_launcher_reads_to` pins the figure.
 MAX_REWRITTEN_FACTOR = 3
 TERMINAL = ("DELIVERED", "COMPLETED", "CANCELLED")
 MAX_INPUT = 1_000_000
@@ -855,6 +858,9 @@ def verify_payload(args, payload, public, answer):
     read_sha256 = None
     checks["answer"] = sha256(answer) == payload["answer_sha256"]
     if not checks["answer"]:
+        # Whether the file had to be read again is a fact about the input, not a verdict on
+        # it: `checks` holds verdicts, and it holds only booleans. The fact is told beside
+        # them, under `answer_rewritten`, in the summary and in the receipt shown.
         # Written again by an editor, the same answer is the same answer. It is accepted
         # under its own name, "normalized", never silently: the digest of the file as read
         # goes into the receipt shown, so a reader sees that the bytes are not the
@@ -866,7 +872,7 @@ def verify_payload(args, payload, public, answer):
         except UnicodeDecodeError:
             pass
         if same is not None and sha256(same) == payload["answer_sha256"]:
-            checks["answer"], read_sha256, answer = "normalized", sha256(answer), same
+            checks["answer"], read_sha256, answer = True, sha256(answer), same
         else:
             raise Refusal(
                 "ANSWER_CHANGED",
@@ -875,7 +881,19 @@ def verify_payload(args, payload, public, answer):
             )
     stated = {c["sha256"] for c in payload["contracts"]}
     for path in args.contract or []:
-        if sha256(canonical(strict_json(read_input(path, MAX_RECEIPT)))) not in stated:
+        # The receipt is intact here: a file of the reader's own that cannot be read is
+        # refused under its own name. `strict_json` raises ValueError, which the net held
+        # out for a malformed receipt would otherwise catch and blame on the receipt.
+        try:
+            given = sha256(canonical(strict_json(read_input(path, MAX_RECEIPT))))
+        except ValueError as exc:
+            raise Refusal(
+                "CONTRACT_NOT_JSON",
+                f"{Path(path).name} is not JSON this tool can read",
+                "Pass the contract-*.json of the receipt folder",
+                exit_code=2,
+            ) from exc
+        if given not in stated:
             raise Refusal("CONTRACT_CHANGED", f"{path} is not the contract of this receipt")
     # The prompt is recompiled from the signed contract: the same tool must produce the
     # same contract, so the classification of every unit is reproduced, not trusted. The
@@ -897,7 +915,16 @@ def verify_payload(args, payload, public, answer):
     )
     checks["prompt"] = payload["prompt_sha256"] == compilations[0][1]["prompt_sha256"]
     if args.prompt:
-        expected = sha256(prompts.normalize(read_input(args.prompt)))
+        # Same boundary as the contract above: this file belongs to the reader.
+        try:
+            expected = sha256(prompts.normalize(read_input(args.prompt)))
+        except UnicodeDecodeError as exc:
+            raise Refusal(
+                "PROMPT_NOT_UTF8",
+                f"{Path(args.prompt).name} is not UTF-8 text",
+                "Pass the prompt.txt of the receipt folder",
+                exit_code=2,
+            ) from exc
         checks["prompt_file"] = expected == payload["prompt_sha256"]
     # Every figure shown about the answer is recomputed from the answer itself.
     text = answer.decode("utf-8")
@@ -979,9 +1006,19 @@ def verify_payload(args, payload, public, answer):
         answer_read_sha256=read_sha256,
         **recomputed_meta,
     )
+    # A different verifier code is not a forgery: the signature holds and nothing was
+    # edited, so it stays out of the verdict. But it must not pass unsaid to a reader who
+    # only reads this one line.
+    code_text = (
+        ""
+        if checks["same_code"]
+        else " Attention : les vérificateurs qui relisent ce reçu n'ont pas le code de ceux "
+        "qui l'ont écrit, donc les statuts ont été recalculés par un autre code."
+    )
     return (0 if ok else 1), {
         "ok": ok,
         "case_id": payload["case_id"],
+        "answer_rewritten": read_sha256 is not None,
         "checks": checks,
         "counts": counts(recomputed),
         "receipt": render(shown),
@@ -994,9 +1031,10 @@ def verify_payload(args, payload, public, answer):
             " Le fichier de réponse relu n'est pas octet pour octet celui du reçu : il "
             "redonne le texte attesté après normalisation, marque d'ordre des octets, fins "
             "de ligne Windows ou composition Unicode. Son empreinte est dans le reçu affiché."
-            if checks["answer"] == "normalized"
+            if read_sha256
             else ""
-        ),
+        )
+        + code_text,
     }
 
 

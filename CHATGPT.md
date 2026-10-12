@@ -89,10 +89,15 @@ uv run --no-sync python -m skillflow_prompts chatgpt verify \
 
 `verify` recompile le prompt et recalcule chaque statut au lieu de relire le reçu. Si mon
 éditeur a changé les fins de ligne, ajouté une marque d'ordre des octets ou changé la
-composition Unicode, `verify` accepte et le dit : `checks.answer` vaut `normalized`, le
-reçu affiché porte l'empreinte du fichier relu à côté de celle attestée, et tout est
-recalculé sur le texte attesté. Tout autre octet modifié échoue avec `ANSWER_CHANGED`,
-un retour chariot seul compris.
+composition Unicode, `verify` accepte et le dit : `answer_rewritten` vaut `true`, le reçu
+affiché porte l'empreinte du fichier relu à côté de celle attestée, et tout est recalculé
+sur le texte attesté. Tout autre octet modifié échoue avec `ANSWER_CHANGED`, y compris un
+retour chariot seul.
+
+Les valeurs de `checks` sont des verdicts, donc des booléens. Seule `key_anchored` peut
+valoir `null`, ce qui veut dire « inconnu », pas « faux ». Si `same_code` est `false`, le
+résumé le dit en clair : les statuts ont été recalculés par un autre code de vérificateurs
+que celui qui les a écrits.
 
 Une mise en garde sur la clé. Avec `--root <ROOT>`, l'ancre vient du bac à sable qui a
 produit le reçu : `checks.key_anchored` vaut `true` et la sortie écrit « clé ancrée », ce

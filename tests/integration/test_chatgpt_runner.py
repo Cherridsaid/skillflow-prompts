@@ -652,7 +652,7 @@ def test_usage_errors_are_one_json_object_with_exit_code_2(tmp_path):
 def test_verify_accepts_the_same_answer_written_again_and_says_so(tmp_path):
     """What an editor changes on its own is not another answer: line ends, composition, BOM.
 
-    The file is accepted under its own name, `normalized`, and said in the summary. Every
+    The file is accepted and `answer_rewritten` says so, with the summary. Every
     figure of the receipt is then recomputed from the normalized bytes, so the receipt
     shown is word for word the one a strict reading gives. Any other byte still fails.
     """
@@ -689,7 +689,7 @@ def test_verify_accepts_the_same_answer_written_again_and_says_so(tmp_path):
         again.write_bytes(data)
         code, same = chatgpt("verify", "--receipt", receipt, "--answer", again, "--root", root)
         assert code == 0, (name, same)
-        assert same["checks"]["answer"] == "normalized", name
+        assert same["checks"]["answer"] is True and same["answer_rewritten"] is True, name
         # The receipt shown is the only artefact a reader is asked to read: it must say
         # itself that these bytes are not the receipted ones, and name their digest.
         assert same["receipt"] != strict["receipt"], name
@@ -745,7 +745,7 @@ def test_an_answer_at_the_size_limit_can_still_be_written_again(tmp_path):
     assert windows.stat().st_size > 1_000_000
     code, same = chatgpt("verify", "--receipt", receipt, "--answer", windows, "--root", root)
     assert code == 0, same
-    assert same["checks"]["answer"] == "normalized"
+    assert same["checks"]["answer"] is True and same["answer_rewritten"] is True
 
 
 def test_the_largest_answer_survives_being_decomposed(tmp_path):
@@ -776,7 +776,106 @@ def test_the_largest_answer_survives_being_decomposed(tmp_path):
     assert len(data) > 2 * 1_000_000
     code, same = chatgpt("verify", "--receipt", receipt, "--answer", decomposed, "--root", root)
     assert code == 0, same
-    assert same["checks"]["answer"] == "normalized"
+    assert same["checks"]["answer"] is True and same["answer_rewritten"] is True
+
+
+def test_an_unreadable_file_of_mine_is_not_blamed_on_the_receipt(tmp_path):
+    """The receipt is intact: the file that cannot be read is the reader's own.
+
+    `UnicodeDecodeError` is a `ValueError`, and a failed JSON read raises one too, so both
+    fell into the net held out for a malformed receipt and `verify` answered that the
+    receipt was not well formed. It said the wrong thing about the wrong file.
+    """
+    from skillflow_prompts import chatgpt as launcher
+
+    root = tmp_path / "state"
+    _, folder = deliver_right_answer(tmp_path, root)
+    receipt, answer = folder / "receipt.json", folder / "answer.txt"
+    latin = tmp_path / "latin1.txt"
+    latin.write_bytes("Réponse".encode("latin-1"))
+    code, refused = launcher.run(
+        ["verify", "--receipt", str(receipt), "--answer", str(answer), "--prompt", str(latin)]
+    )
+    assert code == 2, refused
+    assert refused["error"]["code"] == "PROMPT_NOT_UTF8"
+    assert latin.name in refused["error"]["message"]
+    assert "RECEIPT" not in json.dumps(refused, ensure_ascii=False)
+
+    broken = tmp_path / "broken.json"
+    broken.write_text("{ ceci n'est pas du json", encoding="utf-8")
+    code, refused = launcher.run(
+        ["verify", "--receipt", str(receipt), "--answer", str(answer), "--contract", str(broken)]
+    )
+    assert code == 2, refused
+    assert refused["error"]["code"] == "CONTRACT_NOT_JSON"
+    assert broken.name in refused["error"]["message"]
+    assert "RECEIPT" not in json.dumps(refused, ensure_ascii=False)
+
+    # A receipt that really is malformed still says exactly that.
+    liar = tmp_path / "liar.json"
+    liar.write_bytes(resign(folder, lambda p: p.update(rounds_used="0\n# faux")))
+    code, refused = launcher.run(["verify", "--receipt", str(liar), "--answer", str(answer)])
+    assert code == 1 and refused["error"]["code"] == "RECEIPT_MALFORMED"
+    # And a contract that reads but is not this receipt's keeps its own refusal.
+    code, refused = launcher.run(
+        ["verify", "--receipt", str(receipt), "--answer", str(answer), "--contract", str(receipt)]
+    )
+    assert code == 1 and refused["error"]["code"] == "CONTRACT_CHANGED"
+
+
+def test_a_check_is_never_a_sentence_and_a_rewriting_is_not_a_check(tmp_path):
+    """A table of checks holds verdicts, not prose: what was read is said beside it."""
+    from skillflow_prompts import chatgpt as launcher
+
+    root = tmp_path / "state"
+    _, folder = deliver_right_answer(tmp_path, root)
+    receipt, answer = folder / "receipt.json", folder / "answer.txt"
+    code, strict = launcher.run(
+        ["verify", "--receipt", str(receipt), "--answer", str(answer), "--root", str(root)]
+    )
+    assert code == 0, strict
+    for name, value in strict["checks"].items():
+        # `key_anchored` alone may be unknown, which is a third state, not a verdict.
+        assert isinstance(value, bool) or (name == "key_anchored" and value is None), name
+    assert strict["checks"]["answer"] is True and strict["answer_rewritten"] is False
+
+    again = tmp_path / "again.txt"
+    again.write_bytes(codecs.BOM_UTF8 + answer.read_bytes())
+    code, same = launcher.run(
+        ["verify", "--receipt", str(receipt), "--answer", str(again), "--root", str(root)]
+    )
+    assert code == 0, same
+    for name, value in same["checks"].items():
+        assert isinstance(value, bool) or (name == "key_anchored" and value is None), name
+    assert same["checks"]["answer"] is True and same["answer_rewritten"] is True
+    assert "n'est PAS octet pour octet" in same["receipt"]
+
+
+def test_a_receipt_written_by_other_verifier_code_says_so_in_its_summary(tmp_path):
+    """A different verifier code is not a forgery, and it must not pass unsaid.
+
+    `same_code` stays out of the verdict on purpose: the signature holds and nothing was
+    edited. But a reader who only reads the summary must still learn that the statuses
+    were recomputed by code other than the one that wrote them.
+    """
+    from skillflow_prompts import chatgpt as launcher
+
+    root = tmp_path / "state"
+    _, folder = deliver_right_answer(tmp_path, root)
+    answer = folder / "answer.txt"
+    forged = tmp_path / "other-code.json"
+    forged.write_bytes(resign(folder, lambda p: p["code"].update(verifiers_sha256="0" * 64)))
+    code, shown = launcher.run(
+        ["verify", "--receipt", str(forged), "--answer", str(answer), "--root", str(root)]
+    )
+    assert code == 0 and shown["ok"] is True, shown
+    assert shown["checks"]["same_code"] is False
+    assert "vérificateurs" in shown["summary"], shown["summary"]
+    code, honest = launcher.run(
+        ["verify", "--receipt", str(folder / "receipt.json"), "--answer", str(answer)]
+    )
+    assert code == 0 and honest["checks"]["same_code"] is True
+    assert "vérificateurs" not in honest["summary"]
 
 
 def test_no_codepoint_decomposes_past_the_ceiling_the_launcher_reads_to():
