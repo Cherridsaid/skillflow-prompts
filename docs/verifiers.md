@@ -41,12 +41,19 @@ A floor above a limit in the same line asks for an answer that cannot exist: the
 compilation is refused before anything is signed, like two limits that contradict each
 other.
 
-A floor that counts something other than words scopes the count beside it: "au moins deux
-exemples de 5 mots maximum" asks for five words per example, so the limit is proposed and
-never applied to the whole answer. Read as a limit on the answer, it would reject a
+A count of things scopes the word count that follows it immediately, floor word or not:
+"Donne 2 exemples de 5 mots maximum" asks for five words per example, so the limit is
+proposed under "exemples" and never applied to the whole answer. Immediately is the whole
+rule -- one word between the preposition and the count and nothing is read, because
+"Compare les 2 versions de ce texte en 40 mots maximum" counts the answer, and a count of
+things read as a scope everywhere would cost the prompt checks it really gives. Read as a limit on the answer, it would reject a
 ten-word answer the prompt allows. The exception is narrow, and it is what makes "entre 20
 mots minimum et 40 mots maximum" carry both: a word held inside a recognized count wording
 is that count, not a condition on the one beside it.
+
+A scope read in a unit scopes every count in it, so a unit holding one proposes all of
+them. That is how a part of an answer has always been read here, and it errs the only way
+this tool is allowed to err: fewer checks claimed, never more.
 
 ### Ending on a question
 

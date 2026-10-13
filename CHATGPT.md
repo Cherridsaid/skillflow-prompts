@@ -145,9 +145,11 @@ Chaque verdict nomme le comptage qui a décidé, donc la même réponse peut lir
 limite et 33 sous un plancher sans que ce soit un défaut. La règle derrière : un contrôle
 peut être plus faible que la consigne, jamais plus fort.
 
-Un plancher qui compte autre chose que des mots met la limite voisine en `CANDIDAT` : « au
-moins deux exemples de 5 mots maximum » demande cinq mots par exemple, pas cinq mots en
-tout, et l'outil ne contrôle pas une limite qu'il lirait plus strictement que moi.
+Un compte d'objets met en `CANDIDAT` le compte de mots qui le suit immédiatement : « donne
+2 exemples de 5 mots maximum » demande cinq mots par exemple, pas cinq mots en tout, et
+l'outil ne contrôle pas une limite qu'il lirait plus strictement que moi. Un mot entre la
+préposition et le compte et la lecture s'arrête : « compare les 2 versions de ce texte en
+40 mots maximum » compte bien la réponse entière.
 
 Un terme interdit est cherché comme **mot entier**, jamais à l'intérieur d'un mot plus
 long : interdire « roue » n'interdit pas « brouette ». Éviter le mot n'évite pas l'idée non

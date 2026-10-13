@@ -233,6 +233,17 @@ SCOPED = re.compile(
     re.I,
 )
 ALTERNATIVE = re.compile(rf"\b(?:{CONDITIONAL})\b", re.I)
+# A count of things, immediately followed by a word count, scopes that count: "2 exemples
+# de 5 mots maximum" asks for five words per example, and a limit of five read on the whole
+# answer rejects the ten words the prompt asks for. The noun is anything but "mots" or
+# "words" themselves, a compound noun included ("2 mots-clés de 5 mots maximum"), and it is
+# the word kept: what it scopes is proposed under it.
+ENUMERATION = re.compile(
+    # The preposition carries its own separator: an elision closes on the apostrophe
+    # ("2 exemples d'au plus 5 mots"), a whole word on a space.
+    rf"\b\d{{1,5}}\s+(?!(?:mots|words)\b{COMPOUND})([^\W\d_][\w\-‐‑–—]*)\s+(?:(?:de|of)\s|d['’])",
+    re.I,
+)
 NEGATION = re.compile(
     r"\b(?:ne|pas|jamais|sans|aucune?|ni|not|never|no|without|avoid|évite[rz]?)\b|n['’]|don['’]t",
     re.I,
@@ -643,7 +654,24 @@ def detect(text):
         group = bisect.bisect_right(starts, position) - 1
         return group >= 0 and position < merged[group][1]
 
-    scopes = [position for position in scopes if not counted(position)]
+    # A count of things scopes the word count that follows it *immediately*: one word in
+    # between and the count may well be the answer's ("les 3 chapitres de ce livre en 40
+    # mots maximum" counts the answer), so nothing is read there. A limit left as a rule
+    # where it governs the answer is the right reading; read as a scope everywhere, a count
+    # of things would cost the prompt checks it really gives.
+    # Only the blanks behind the preposition are read, never the text between it and the
+    # next count: with one count at the end of the line, taking that text copied the rest
+    # of the line for every count of things before it. Measured on that form: 20 000 counts
+    # 0,22 s, 40 000 0,55 s, 80 000 1,44 s, 160 000 34 s. The runs of blanks walked here
+    # belong to one match each, since the matches themselves never overlap.
+    for match in ENUMERATION.finditer(plain):
+        index = match.end()
+        while index < len(plain) and plain[index].isspace():
+            index += 1
+        after = bisect.bisect_left(starts, match.end())
+        if after < len(starts) and starts[after] == index:
+            scoping[match.start(1)] = match.group(1)
+    scopes = sorted(position for position in scoping if not counted(position))
     limits, shelved, floors, lowered = [], [], [], []
     for start, end, value, parameter in found:
         held, set_aside = (limits, shelved) if parameter == "max_words" else (floors, lowered)

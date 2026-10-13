@@ -594,6 +594,32 @@ def test_a_heading_made_of_thousands_of_limits_is_read_once():
     assert proposals(compiled)[-1][:4] == ("u2-contains-1", "mechanical", "contains", "Paris")
 
 
+def test_thousands_of_counts_of_things_before_one_word_count_stay_linear():
+    """A count of things looks for the word count right behind it, and only the blanks
+    between them are read.
+
+    Raised by the reviewer on the first form of this reading, which took the whole text
+    between a count of things and the next word count: with one word count at the end of
+    the line, each of the forty thousand counts before it copied the rest of the line.
+    Measured on that form: 20 000 counts 0,22 s, 40 000 0,55 s, 80 000 1,44 s, 160 000
+    **34 s** -- the shape of a cost that grows with the square of the input, on a prompt
+    nobody has to be hostile to write by accident.
+    """
+    import time
+
+    hostile = "2 a de " * 160_000 + "5 mots maximum."
+    started = time.monotonic()
+    rules, _meaning, candidates = detect(hostile)
+    # The bound separates two orders of cost and pins no machine's speed: walking the
+    # blanks reads this line in 1,8 s here, where copying the suffix took 34 s, and the
+    # growth is the one that matters -- doubling the input doubles the time (0,22 s for
+    # 20 000 counts, 0,45 s, 0,91 s, 1,77 s).
+    assert time.monotonic() - started < 30.0
+    # And the reading itself is unchanged: the count of things scopes the word count.
+    assert rules == []
+    assert candidates == [{"parameter": "max_words", "value": 5, "demoted_by": "a"}]
+
+
 def test_many_rules_on_one_line_are_refused_before_anything_is_serialized():
     """Each obligation repeats its unit: that expansion is counted, not discovered later."""
     import time
@@ -946,6 +972,68 @@ def test_a_floor_on_the_number_of_words_is_checked_like_a_limit():
     # contract exists, like two incompatible limits.
     with pytest.raises(Conflict):
         compile_prompt(b"Au moins 40 mots et au plus 20 mots.")
+
+
+def test_a_count_of_things_scopes_the_word_count_that_follows_it_immediately():
+    """ "Donne 2 exemples de 5 mots maximum." asks for five words per example.
+
+    Measured before this phase, and unchanged by the one before it: the limit was applied
+    to the whole answer, so a ten-word answer -- two examples of five words, exactly what
+    the prompt asks for -- came back REJETE. A check stronger than the instruction, which
+    is the one thing this project never does. The noun carrying the count is not in the
+    list of parts ("titre", "résumé", "phrase"), so nothing scoped it.
+
+    Immediately is the whole rule. "Compare les 2 versions de ce texte en 40 mots maximum."
+    counts the answer, not each version, and one word between the preposition and the count
+    is enough to stop the reading: a limit left as a rule there is the right reading, and a
+    limit turned into a candidate everywhere would cost checks the prompt really gives.
+    """
+    for text, parameter, value, word in (
+        ("Donne 2 exemples de 5 mots maximum.", "max_words", 5, "exemples"),
+        ("Give 2 examples of 5 words maximum.", "max_words", 5, "examples"),
+        ("Donne 3 arguments de 20 mots maximum.", "max_words", 20, "arguments"),
+        # The same reading on the other side of the count, and on a compound noun.
+        ("Liste 4 idées de 8 mots minimum.", "min_words", 8, "idées"),
+        ("Donne 2 mots-clés de 5 mots maximum.", "max_words", 5, "mots-clés"),
+        # The count wording need not start on a number.
+        ("Donne 2 exemples d'au plus 5 mots.", "max_words", 5, "exemples"),
+    ):
+        rules, _meaning, candidates = detect(text)
+        assert rules == [], text
+        assert candidates == [{"parameter": parameter, "value": value, "demoted_by": word}], text
+    # What the preposition does not attach to an item stays a rule on the whole answer.
+    for text, rule in (
+        ("Cite 3 sources en 40 mots maximum.", ("max_words", 40)),
+        ("Donne 2 exemples en 40 mots maximum.", ("max_words", 40)),
+        # One word between the preposition and the count, and the reading stops: the limit
+        # counts the answer. ("chapitres" would scope it anyway, as a part of an answer.)
+        ("Compare les 2 versions de ce texte en 40 mots maximum.", ("max_words", 40)),
+        ("Réponds en 40 mots maximum.", ("max_words", 40)),
+        ("Réponds en au moins 40 mots.", ("min_words", 40)),
+        ("Give 3 reasons in at most 40 words.", ("max_words", 40)),
+    ):
+        rules, _meaning, _candidates = detect(text)
+        assert {"parameter": rule[0], "value": rule[1]} in rules, text
+    rules, _meaning, candidates = detect("Entre 20 mots minimum et 40 mots maximum.")
+    assert rules == [
+        {"parameter": "max_words", "value": 40},
+        {"parameter": "min_words", "value": 20},
+    ]
+    assert candidates == []
+    # A scope read in a unit scopes every count in it, as every other scope word does, so
+    # the second limit is proposed under the same noun. Weaker than the instruction, never
+    # stronger, and one confirmation away from a check.
+    rules, _meaning, candidates = detect(
+        "Donne 2 exemples de 5 mots maximum et réponds en 40 mots maximum."
+    )
+    assert rules == []
+    assert [(c["value"], c["demoted_by"]) for c in candidates] == [
+        (5, "exemples"),
+        (40, "exemples"),
+    ]
+    # A term asked for in the same unit keeps its check: a count of things costs it nothing.
+    asked = detect("Donne 2 exemples de 5 mots maximum. Mentionne « Paris ».")[0]
+    assert {"parameter": "contains", "value": "Paris"} in asked
 
 
 def test_a_floor_counting_something_other_than_words_still_scopes_the_limit_beside_it():
