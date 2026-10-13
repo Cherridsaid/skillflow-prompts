@@ -80,6 +80,11 @@ def test_chatgpt_md_carries_the_steps_a_new_conversation_needs():
         "--by said",
         "CONFIRM_AFTER_ANSWER",
         "jamais rejeté",
+        # After an answer, raising is still open and lowering is not: the document says
+        # which, and says that pasting the same prompt is not a way around it.
+        "monter reste possible",
+        "`--refuse`, `CONFIRM_AFTER_ANSWER`",
+        "le même prompt reprend le même dossier",
     ):
         assert step in text, step
     # The same guarantee the READMEs never claim: the tool does not lock the loop.

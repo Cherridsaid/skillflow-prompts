@@ -277,6 +277,45 @@ class Session:
             (self.root / "compilations" / (ref.split("@")[0] + ".json")).read_bytes()
         )
 
+    def confirmations(self, prompt_sha256):
+        """({id: who} ever confirmed for this prompt, whether an answer was read for it).
+
+        A decision compiles another contract, so one prompt walks through several contracts
+        and several cases, and the question belongs to the prompt, never to one case: asked
+        per case, it would answer "none" on the case a decision has just opened, and asked
+        of the contract that stands, it would answer "none" as soon as another prompt was
+        pasted in between -- in both cases one command would be enough to lower a check an
+        answer had already been read against.
+
+        Read from the contracts the authority itself ran, each naming in its own origin line
+        the prompt it compiles and who confirmed what. Neither the state file nor a later
+        compilation can quietly drop one. Every confirmation of the prompt is gathered, not
+        only the ones in force at the moment an answer was read: a reader who raised a check
+        and lowered it again before any answer sees it come back if they paste the prompt
+        after one, which errs towards checking more, never less.
+        """
+        with self.controller.store.transaction() as db:
+            rows = [
+                dict(row)
+                for row in db.execute(
+                    "SELECT c.id AS case_id, i.contract AS contract FROM cases c "
+                    "JOIN invocations i ON i.case_id = c.id WHERE c.case_key LIKE ?",
+                    ("auto:chatgpt:%",),
+                ).fetchall()
+            ]
+        confirmed, answered = {}, False
+        for row in rows:
+            try:
+                fields = origin_fields(strict_json(row["contract"].encode("utf-8")))
+            except (KeyError, TypeError, ValueError):
+                # A contract this tool did not compile says nothing about this prompt.
+                continue
+            if fields.get("prompt_sha256") != prompt_sha256:
+                continue
+            confirmed.update(prompts.decided(fields.get("confirmed", "")))
+            answered = answered or bool(self.rounds(row["case_id"]))
+        return confirmed, answered
+
 
 def evaluate(compilations, answer):
     """Per-unit rows: mechanical checks rerun on the exact bytes, meaning left NON_VERIFIE."""
@@ -466,6 +505,17 @@ def action_prompt(args):
         ) from exc
     except prompts.TooLarge as exc:
         raise Refusal("PROMPT_TOO_LARGE", str(exc), "Shorten the prompt", exit_code=2) from exc
+    # Once an answer has been read for this prompt, its confirmed checks come back with it.
+    # Pasted again, the prompt would otherwise compile a contract carrying no decision at
+    # all, which lowers every check at once, without naming anyone, and by a command that
+    # `confirm --refuse` is refused for. Before any answer nothing is restored: pasting the
+    # prompt again is then the documented way to start over. The author of each check comes
+    # from the contract the authority ran, so the receipt still names who confirmed.
+    confirmed, answered = session.confirmations(compilation["prompt_sha256"])
+    if answered and confirmed:
+        compilation = prompts.compile_prompt(
+            compilation["contract"]["instructions"].encode("utf-8"), confirmed=confirmed
+        )
     status, cancelled = open_case(root, session, compilation, "a new prompt")
     return 0, opened(status, cancelled, compilation)
 
@@ -570,8 +620,13 @@ def action_confirm(args):
 
     A confirmation compiles a new contract from the same prompt, so the case opened on the
     old one is cancelled and a new one admitted, and the receipt will carry who confirmed.
-    It is refused once an answer has been submitted: nobody chooses the rules of a copy
-    after reading it.
+
+    Once an answer has been read, only raising is still allowed. Raising adds a check and
+    can therefore never excuse what was rejected; lowering would drop the very rule that
+    rejected the answer, and nobody chooses the rules of a copy after reading it. Each
+    raise opens a case on a stricter contract, with its own correction budget: a reader who
+    buys attempts that way pays for them in checks, and once every candidate is raised
+    there is nothing left to raise.
     """
     root = root_path(args.root)
     session = Session(root)
@@ -582,11 +637,17 @@ def action_confirm(args):
             f"The case is {status['state']}",
             "Paste the next prompt: chatgpt prompt --file <prompt>",
         )
-    if session.rounds(current["case_id"]):
+    compilation = session.compilation(current["contracts"][0])
+    if args.refuse and session.confirmations(compilation["prompt_sha256"])[1]:
+        # Asked of the prompt and not of this case: a decision opens a case the authority
+        # has read no answer for, so a per-case question would let the very next command
+        # lower what a copy was already read against. Pasting the same prompt is no way out
+        # either, and must not be advised as one: the case is addressed by its prompt.
         raise Refusal(
             "CONFIRM_AFTER_ANSWER",
-            "An answer was already checked against this prompt",
-            "Confirm before the first answer; paste the prompt again to start over",
+            "A check cannot be lowered once an answer has been read against this prompt",
+            "Raising is still open: --id only adds checks. To lower one, start from another "
+            "prompt or another folder",
             exit_code=2,
         )
     # The name enters the contract's origin line, where fields are separated by ";" and
@@ -600,7 +661,6 @@ def action_confirm(args):
             "Letters, digits, dot, underscore, @, + and dash, 1 to 64 characters: said, alice.b",
             exit_code=2,
         )
-    compilation = session.compilation(current["contracts"][0])
     raising, lowering = set(args.id or []), set(args.refuse or [])
     both = raising & lowering
     if both:

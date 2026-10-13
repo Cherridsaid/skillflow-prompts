@@ -102,10 +102,16 @@ uv run --no-sync python -m skillflow_prompts chatgpt confirm --root <ROOT> --by 
 
 `--id` monte un candidat en contrôle, `--refuse` descend un contrôle en candidat, `--by`
 nomme la personne qui décide. Ce nom est **déclaré au clavier**, pas authentifié : le reçu
-l'affiche comme tel, et c'est moi qui sais si c'est bien moi qui l'ai tapé. La confirmation compile un **nouveau** contrat et rouvre le
-dossier ; elle est refusée dès qu'une réponse a été contrôlée (`CONFIRM_AFTER_ANSWER`),
-parce qu'on ne choisit pas ses règles en connaissant déjà la copie. Un identifiant inconnu
-est refusé avec la liste des identifiants connus (`CONFIRM_UNKNOWN`).
+l'affiche comme tel, et c'est moi qui sais si c'est bien moi qui l'ai tapé. La confirmation
+compile un **nouveau** contrat et rouvre le dossier.
+
+Une fois qu'une réponse a été contrôlée, **monter reste possible** : `--id` ne fait
+qu'ajouter un contrôle, donc cela n'excuse jamais ce qui a été rejeté. **Descendre est
+refusé** (`--refuse`, `CONFIRM_AFTER_ANSWER`) : on ne retire pas la règle qui vient de
+rejeter la copie. Recoller le même prompt ne contourne rien, parce que le dossier est
+adressé par le prompt : le même prompt reprend le même dossier, avec ses réponses déjà
+comptées et les décisions déjà prises. Un identifiant inconnu est refusé avec la liste des
+identifiants connus (`CONFIRM_UNKNOWN`).
 
 Rédige ensuite ta réponse dans un fichier, et fais-la contrôler.
 

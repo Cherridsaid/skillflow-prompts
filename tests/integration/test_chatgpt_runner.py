@@ -1051,6 +1051,79 @@ def test_a_confirmation_raises_a_candidate_into_a_check_and_the_receipt_says_who
     assert code == 1 and refused["error"]["code"] == "CONTRACT_CHANGED"
 
 
+def test_a_check_can_be_raised_after_an_answer_but_never_lowered(tmp_path):
+    """Seeing a candidate, then deciding to have it checked, is the human order of things.
+
+    Field evidence of 2026-10-13: the first real trial of this mechanism in ChatGPT stopped
+    dead at this guard, having read the two candidates and the answer. Raising can only
+    harden the contract, so it is allowed once an answer has been read; lowering after the
+    verdict would drop the very rule that just rejected the answer, so it stays refused.
+    The refusal no longer advises pasting the same prompt again: the case is addressed by
+    the prompt, so the same prompt resumes the same case and the same refusal.
+    """
+    root = tmp_path / "travail"
+    prompt, answer = tmp_path / "prompt.txt", tmp_path / "answer.txt"
+    prompt.write_text(SCOPED_PROMPT, encoding="utf-8")
+    answer.write_text(TOO_LONG, encoding="utf-8")
+    assert chatgpt("init", "--root", root)[0] == 0
+    code, first = chatgpt("prompt", "--root", root, "--file", prompt)
+    assert code == 0 and sum(r["kind"] == "candidate" for r in first["units"]) == 2
+    code, read = chatgpt("answer", "--root", root, "--file", answer)
+    assert code == 0 and read["counts"]["REJETE"] == 0 and read["counts"]["CANDIDAT"] == 2
+
+    # Lowering after the verdict stays refused, and the hint no longer sends the reader
+    # back to the same prompt, which resumes the same case and the same refusal.
+    code, lowered = chatgpt("confirm", "--root", root, "--by", "said", "--refuse", "u2-max-words")
+    assert code == 2 and lowered["error"]["code"] == "CONFIRM_AFTER_ANSWER"
+    assert "--id" in lowered["error"]["hint"]
+    assert "paste the prompt again" not in lowered["error"]["hint"]
+    # Raising is allowed, and it hardens: a new case opens on the stricter contract.
+    code, raised = chatgpt("confirm", "--root", root, "--by", "said", "--id", "u2-max-words")
+    assert code == 0, raised
+    assert raised["case_id"] != first["case_id"]
+    rows = {r["id"]: r for r in raised["units"]}
+    assert rows["u2-max-words"]["kind"] == "mechanical"
+    assert rows["u2-max-words"]["confirmed_by"] == "said"
+    assert rows["u3-contains-1"]["kind"] == "candidate"
+    # The case just opened has no answer of its own, and that is not a way back: the
+    # question is asked about the prompt, so lowering is refused here too.
+    code, right_after = chatgpt(
+        "confirm", "--root", root, "--by", "said", "--refuse", "u2-max-words"
+    )
+    assert code == 2 and right_after["error"]["code"] == "CONFIRM_AFTER_ANSWER", right_after
+    # Nor is pasting the same prompt again: it resumes where the prompt stands, decisions
+    # included, instead of compiling a contract that carries none.
+    code, pasted = chatgpt("prompt", "--root", root, "--file", prompt)
+    assert code == 0, pasted
+    standing = {r["id"]: r for r in pasted["units"]}
+    assert standing["u2-max-words"]["kind"] == "mechanical"
+    assert standing["u2-max-words"]["confirmed_by"] == "said"
+    assert pasted["confirmed"] == {"u2-max-words": "said"}
+    # The very same answer is now rejected, by the obligation that was just raised.
+    code, again = chatgpt("answer", "--root", root, "--file", answer)
+    assert code == 1
+    verdicts = {r["id"]: r["status"] for r in again["rows"]}
+    assert verdicts["u2-max-words"] == "REJETE" and verdicts["u3-contains-1"] == "CANDIDAT"
+    # On the new case too, once its own answer is read, lowering is refused.
+    code, still = chatgpt("confirm", "--root", root, "--by", "said", "--refuse", "u2-max-words")
+    assert code == 2 and still["error"]["code"] == "CONFIRM_AFTER_ANSWER"
+    # Raising the other candidate still works, and the first decision keeps its author.
+    code, both = chatgpt("confirm", "--root", root, "--by", "said", "--id", "u3-contains-1")
+    assert code == 0, both
+    kinds = {r["id"]: r["kind"] for r in both["units"]}
+    assert kinds["u2-max-words"] == "mechanical" and kinds["u3-contains-1"] == "mechanical"
+    assert both["confirmed"] == {"u2-max-words": "said", "u3-contains-1": "said"}
+    # Nor is pasting another prompt in between: back on this one, its confirmed checks are
+    # back, with their author, since what was confirmed belongs to the prompt.
+    other = tmp_path / "autre.txt"
+    other.write_text(TRIAL_PROMPT, encoding="utf-8")
+    assert chatgpt("prompt", "--root", root, "--file", other)[0] == 0
+    code, back = chatgpt("prompt", "--root", root, "--file", prompt)
+    assert code == 0, back
+    assert back["confirmed"] == {"u2-max-words": "said", "u3-contains-1": "said"}
+    assert all(r["kind"] != "candidate" for r in back["units"]), back["units"]
+
+
 def test_more_candidates_than_one_receipt_can_carry_are_refused_before_a_case_opens(tmp_path):
     """Every entry, candidate or check, repeats its unit in the rows a receipt shows.
 
