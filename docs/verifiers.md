@@ -13,7 +13,7 @@ code that recomputed a status is the code that wrote it.
 | Parameter | What it checks | What it does not |
 |---|---|---|
 | `contains` | each term appears in the answer, as a substring, case-sensitive | that the term is used, or used correctly |
-| `not_contains` | no forbidden term appears, same substring rule | that the idea is absent: only the string is |
+| `not_contains` | no forbidden term appears as a whole word | that the idea is absent: only the word is |
 | `min_length` | the answer holds at least that many characters | that the characters mean anything |
 | `max_words` | the answer holds at most that many words | that the words are the right ones |
 
@@ -32,9 +32,18 @@ Every other denial keeps the behaviour it has always had: the wording is **set a
 never proposed as a candidate, never confirmable. "N'utilise pas au plus trois mots" asks
 for the opposite of a limit, and confirming it would invert the prompt.
 
-A ban is searched as a plain substring, so "Paris" is found inside "Parisien", and a ban on
-a word does not stop the idea: a text can avoid "beurre" and describe it in full. The unit
-keeps its rule of meaning for that, under `NON_VERIFIE`.
+A ban is searched as a **whole word**, never inside a longer one, and this is the one place
+where a ban and a requirement do not share a rule. `contains` may be read loosely: "Paris"
+found inside "Parisien" passes a check the instruction would also pass, which is weaker and
+harmless. A ban read that way would be **stronger** than the instruction: "ne mentionne pas
+« roue »" accepts "brouette", and rejecting that answer rejects what the prompt allows.
+
+Measured on the first version shipped, where exactly that answer came back `REJETE`. The
+boundary is this project's own definition of a word, a letter or a digit on either side, so
+"roues" now passes. That is the weaker side, and the weaker side is the allowed one.
+
+A ban on a word does not stop the idea either: a text can avoid "beurre" and describe it in
+full. The unit keeps its rule of meaning for that, under `NON_VERIFIE`.
 
 ### How a word is counted
 

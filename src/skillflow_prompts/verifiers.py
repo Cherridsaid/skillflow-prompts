@@ -37,15 +37,40 @@ def words(text):
     return count
 
 
+def letter(char):
+    """True when this character belongs to a word: a letter or a digit, as `words` reads them."""
+    return bool(char) and unicodedata.category(char)[0] in "LN"
+
+
+def standalone(text, term):
+    """True when `term` appears in `text` as a whole run, never inside a longer word.
+
+    A ban searched as a substring is **stronger** than the instruction that carries it:
+    "ne mentionne pas « roue »" accepts "brouette", and rejecting that answer rejects what
+    the prompt allows. A check may be weaker than its instruction and never stronger, so
+    the ban stops at the boundary of a word -- the project's own boundary, a letter or a
+    digit on either side. "roues" then passes, which is the weaker side, and allowed.
+    """
+    start = text.find(term)
+    while start != -1:
+        before = text[start - 1] if start else ""
+        after = text[start + len(term) : start + len(term) + 1]
+        if not letter(before) and not letter(after):
+            return True
+        start = text.find(term, start + 1)
+    return False
+
+
 def check(obligation, inputs):
     verifier, params = obligation["verifier"], obligation["parameters"]
     if verifier == "text":
         text = inputs["artifact" if "artifact" in inputs else "message"].decode("utf-8")
         missing = [s for s in params.get("contains", []) if s not in text]
-        # A forbidden term is the one denial this file can settle: a string is in the text
-        # or it is not. Found as a substring, exactly as `contains` is: "Paris" is present
-        # in "Parisien", and the unit keeps its rule of meaning for what that misses.
-        present = [s for s in params.get("not_contains", []) if s in text]
+        # A forbidden term is the one denial this file can settle. Found as a whole word,
+        # not as a substring: see `standalone`, which says why the two differ for a ban and
+        # not for a requirement. The unit keeps its rule of meaning for the rest, since
+        # avoiding a word does not avoid the idea.
+        present = [s for s in params.get("not_contains", []) if standalone(text, s)]
         result = {
             "passed": not missing and not present and len(text) >= params.get("min_length", 1),
             "missing_terms": missing,

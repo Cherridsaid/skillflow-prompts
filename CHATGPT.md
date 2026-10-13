@@ -134,9 +134,10 @@ uv run --no-sync python -m skillflow_prompts chatgpt answer --root <ROOT> --file
 
 Trois choses sont contrôlées mécaniquement, et rien d'autre : une **limite de mots**, un
 **terme requis**, et un **terme interdit** quand je l'écris sous la forme « ne mentionne
-pas « X » » avec le terme entre guillemets. Un terme interdit est cherché tel quel, donc il
-est trouvé même à l'intérieur d'un mot, et éviter le mot n'évite pas l'idée : ce qui reste
-de la consigne demeure `NON_VERIFIE`.
+pas « X » » avec le terme entre guillemets. Un terme interdit est cherché comme **mot
+entier**, jamais à l'intérieur d'un mot plus long : interdire « roue » n'interdit pas
+« brouette ». Éviter le mot n'évite pas l'idée non plus : ce qui reste de la consigne
+demeure `NON_VERIFIE`.
 
 Lis les statuts :
 

@@ -893,8 +893,24 @@ def test_max_words_passes_at_the_limit_and_fails_above():
     assert check(ban, {"message": b"farine et lait"})["passed"]
     found = check(ban, {"message": b"farine et beurre"})
     assert not found["passed"] and found["forbidden_terms"] == ["beurre"]
-    # Searched as a substring, exactly as `contains` is.
-    assert not check(ban, {"message": "beurrer la poêle".encode()})["passed"]
+    # Searched as a whole word, never inside a longer one. A ban read as a substring is
+    # stronger than the instruction that carries it: "ne mentionne pas « roue »" accepts
+    # "brouette", and a check that rejects it rejects what the prompt allows. Measured on
+    # the tree of P5, where exactly that answer came back REJETE. Weaker is permitted, so
+    # "beurrer" and "roues" now pass; stronger is not, and that is what fixes the rule.
+    wheel = {"verifier": "text", "parameters": {"not_contains": ["roue"]}}
+    assert check(wheel, {"message": "une petite brouette attelée".encode()})["passed"]
+    assert check(wheel, {"message": b"deux roues avant"})["passed"]
+    assert check(ban, {"message": "beurrer la poêle".encode()})["passed"]
+    assert not check(wheel, {"message": b"la roue avant"})["passed"]
+    # The boundary is this project's own definition of a word, a letter or a digit, so a
+    # term glued to punctuation is still found, at either end of the text included.
+    assert not check(wheel, {"message": b"sans roue, sans selle."})["passed"]
+    assert not check(wheel, {"message": b"(roue)"})["passed"]
+    assert not check(wheel, {"message": b"roue"})["passed"]
+    # A term carrying no letter and no digit keeps the same neighbourhood rule.
+    marks = {"verifier": "text", "parameters": {"not_contains": ["!!!"]}}
+    assert not check(marks, {"message": b"attention !!! voila"})["passed"]
     assert not check(obligation, {"message": b"un deux trois quatre"})["passed"]
     legacy = {"verifier": "text", "parameters": {"contains": ["x"]}}
     assert "words" not in check(legacy, {"message": b"x"})

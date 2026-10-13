@@ -407,7 +407,7 @@ def verdict(entry, result):
         return {
             "status": "REJETE",
             "detail": f"terme interdit présent : « {entry['value']} » "
-            "(casse et accents comptent ; cherché tel quel, même à l'intérieur d'un mot)",
+            "(casse et accents comptent ; cherché comme mot entier, jamais dans un mot plus long)",
         }
     if result["passed"]:
         return {"status": "VERIFIE", "detail": "terme présent"}
