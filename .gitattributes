@@ -1,3 +1,13 @@
+# Line endings are decided here, not by each clone's configuration.
+#
+# Measured on 2026-10-13: adding this file at all switched on the CRLF conversion that
+# `core.autocrlf=true` asks for, and `skillflow-prompts schemas --check` compares bytes.
+# A fresh checkout then carried one extra carriage return in each generated schema, the
+# check called them stale, and the Windows build went red on a commit whose working tree
+# was clean. Pinning the working-tree ending removes the difference between two clones.
+* text=auto eol=lf
+*.png binary
+
 # The decorative images stay in the repository and out of the archive.
 #
 # `git archive` builds the zip people attach to a conversation. Four megabytes of

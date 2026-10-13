@@ -226,6 +226,10 @@ def test_no_image_is_undocumented_or_passed_off_as_an_output():
     # The archive people upload carries no decoration: the exclusion is part of the deal.
     attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
     assert "docs/images/ export-ignore" in attributes
+    # And the file that excludes them pins the line endings it switched on: without this,
+    # a fresh checkout carries CRLF, the generated schemas read as stale and the Windows
+    # build goes red on a commit whose working tree is clean.
+    assert "* text=auto eol=lf" in attributes
     # Wherever an image is used, the alt text disclaims it. Checked on every document.
     import re
 
