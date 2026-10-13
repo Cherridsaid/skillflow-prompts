@@ -384,6 +384,8 @@ def evaluate(compilations, answer):
 def describe(entry):
     if entry["parameter"] == "max_words":
         return f"au plus {entry['value']} mots"
+    if entry["parameter"] == "ends_with_question":
+        return "finit par une question"
     if entry["parameter"] == "not_contains":
         return f"ne contient pas « {entry['value']} »"
     return f"contient « {entry['value']} »"
@@ -400,6 +402,15 @@ def verdict(entry, result):
             "status": "REJETE",
             "detail": f"{result['words']} mots pour {entry['value']} au plus : "
             f"retire au moins {result['words'] - entry['value']} mots",
+        }
+    if entry["parameter"] == "ends_with_question":
+        if result["passed"]:
+            return {"status": "VERIFIE", "detail": "la réponse finit par une question"}
+        return {
+            "status": "REJETE",
+            "detail": "la réponse ne finit pas par une question : le dernier caractère qui "
+            "est une lettre, un chiffre ou un point d'interrogation doit être un point "
+            "d'interrogation (ce qui décore la fin est ignoré)",
         }
     if entry["parameter"] == "not_contains":
         if result["passed"]:

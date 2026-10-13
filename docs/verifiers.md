@@ -16,10 +16,32 @@ code that recomputed a status is the code that wrote it.
 | `not_contains` | no forbidden term appears as a whole word | that the idea is absent: only the word is |
 | `min_length` | the answer holds at least that many characters | that the characters mean anything |
 | `max_words` | the answer holds at most that many words | that the words are the right ones |
+| `ends_with_question` | the answer ends on a question mark | that the question is open, or worth asking |
 
-A prompt compiled by this tool only ever produces `max_words`, `contains` and
-`not_contains`: a limit on the number of words, a term asked for explicitly, and a term
-forbidden explicitly. Nothing else in a prompt becomes a mechanical check.
+A prompt compiled by this tool only ever produces `max_words`, `contains`, `not_contains`
+and `ends_with_question`: a limit on the number of words, a term asked for explicitly, a
+term forbidden explicitly, and an answer asked to end on a question. Nothing else in a
+prompt becomes a mechanical check.
+
+### Ending on a question
+
+The rule is one sentence, with no list of characters to keep up to date: **the last
+character of the answer that is a letter, a digit or a question mark must be a question
+mark.**
+
+Everything else at the end is ignored, so `**Qu'en penses-tu ?**`, `« Tu viens ? »`,
+`(tu viens ?)`, `Qu'en penses-tu ? 🙂` and `?!` all pass. That matters: a model asked to end
+on a question answers in bold more often than not, and rejecting it would be stronger than
+the instruction. Ignoring a character can only change the verdict when a question mark
+stands behind it, so an affirmation never slips through: "Tu viens." and "Es-tu prêt ?
+Oui." both fall back on a letter.
+
+The question marks known here are `?`, `？` (U+FF1F) and `؟` (U+061F). The list is short on
+purpose and grows when someone meets another one: guessing a character set is how a check
+becomes stronger than the instruction for a language nobody tested.
+
+It does **not** check that the question is open, or that it is worth asking. "Termine par
+une question ouverte" keeps its rule of meaning for the word "ouverte".
 
 ### The one denial that becomes a check
 

@@ -132,12 +132,19 @@ Rédige ensuite ta réponse dans un fichier, et fais-la contrôler.
 uv run --no-sync python -m skillflow_prompts chatgpt answer --root <ROOT> --file answer.txt
 ```
 
-Trois choses sont contrôlées mécaniquement, et rien d'autre : une **limite de mots**, un
-**terme requis**, et un **terme interdit** quand je l'écris sous la forme « ne mentionne
-pas « X » » avec le terme entre guillemets. Un terme interdit est cherché comme **mot
-entier**, jamais à l'intérieur d'un mot plus long : interdire « roue » n'interdit pas
-« brouette ». Éviter le mot n'évite pas l'idée non plus : ce qui reste de la consigne
-demeure `NON_VERIFIE`.
+Quatre choses sont contrôlées mécaniquement, et rien d'autre : une **limite de mots**, un
+**terme requis**, un **terme interdit** quand je l'écris sous la forme « ne mentionne pas
+« X » » avec le terme entre guillemets, et une **réponse qui finit par une question** quand
+j'écris « termine par une question ».
+
+Un terme interdit est cherché comme **mot entier**, jamais à l'intérieur d'un mot plus
+long : interdire « roue » n'interdit pas « brouette ». Éviter le mot n'évite pas l'idée non
+plus : ce qui reste de la consigne demeure `NON_VERIFIE`.
+
+Finir par une question se lit ainsi : le dernier caractère de ta réponse qui est une
+lettre, un chiffre ou un point d'interrogation doit être un point d'interrogation. Ce qui
+décore la fin est ignoré, donc le gras, les guillemets, les parenthèses et un emoji final
+ne te feront pas échouer. Que la question soit **ouverte** n'est pas contrôlé.
 
 Lis les statuts :
 

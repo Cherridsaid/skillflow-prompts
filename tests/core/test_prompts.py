@@ -835,6 +835,75 @@ def test_a_forbidden_term_is_checked_and_any_other_denial_is_still_set_aside():
     ]
 
 
+def test_ending_on_a_question_is_checked_and_never_more_strictly_than_asked():
+    """The rule in one sentence, and no list of characters to keep up to date.
+
+    The last character of the answer that is a letter, a digit or a question mark must be a
+    question mark. Everything else at the end is ignored, so bold, italics, closing quotes,
+    brackets and emojis pass -- and a model asked to end on a question answers in bold more
+    often than not. Ignoring a character can only matter when a question mark stands behind
+    it, so an affirmation never slips through: "Tu viens." falls back on a letter.
+    """
+    for text in (
+        "Termine par une question.",
+        "Finis par une question.",
+        "Conclus par une question.",
+        "Termine ta réponse par une question.",
+        "End with a question.",
+        "Finish your answer with a question.",
+    ):
+        rules, _meaning, candidates = detect(text)
+        assert rules == [{"parameter": "ends_with_question", "value": True}], text
+        assert candidates == [], text
+    # Asked of one sentence, not of the answer: checking the end of the whole answer would
+    # reject "Tu viens ? Oui.", which the instruction accepts. Nothing is claimed. Found by
+    # the reviewer, where "une phrase" produced a whole-answer rule.
+    for text in (
+        "Termine une phrase par une question.",
+        "Finish a sentence with a question.",
+        # What follows the question changes the instruction: "Tu viens ? Oui." obeys it,
+        # and checking the end of the answer would reject that. Found by the reviewer.
+        "Termine par une question suivie de sa réponse.",
+        "End with a question followed by its answer.",
+    ):
+        rules, _meaning, candidates = detect(text)
+        assert rules == [] and candidates == [], text
+    # A word that only narrows what kind of question it is leaves the check in place, and
+    # the unit keeps its rule of meaning for that word, which nothing here checks.
+    for text in ("Finis par une question courte.", "End with an open question."):
+        rules, meaning, _candidates = detect(text)
+        assert rules == [{"parameter": "ends_with_question", "value": True}], text
+        assert meaning, text
+    # Read once, never explored: a prompt is untrusted input. Found by the reviewer here
+    # too, where a space written outside the optional group let two quantifiers share the
+    # same run. Measured before the fix: 2 000 spaces 0,016 s, 4 000 0,047 s, 8 000 0,172 s.
+    import time
+
+    for hostile in (
+        "End with a " + " " * 100_000 + "x.",
+        "Termine par une " + " " * 100_000 + "x.",
+    ):
+        started = time.monotonic()
+        detect(hostile)
+        assert time.monotonic() - started < 10.0
+    # "ouverte" is not checked by anything here, so the unit keeps its rule of meaning.
+    rules, meaning, _candidates = detect("Termine par une question ouverte.")
+    assert rules == [{"parameter": "ends_with_question", "value": True}] and meaning
+    # A denial never becomes a check, and a condition or a part makes it a candidate: the
+    # same three readings as every other rule, for the same reason.
+    rules, _meaning, candidates = detect("Ne termine pas par une question.")
+    assert rules == [] and candidates == []
+    rules, _meaning, candidates = detect("Si tu le peux, termine par une question.")
+    assert rules == []
+    assert candidates == [{"parameter": "ends_with_question", "value": True, "demoted_by": "Si"}]
+    # Named for one part of the answer, the check would be stronger than the instruction:
+    # the title may end on a question while the answer does not. So it is proposed.
+    scoped = compile_prompt(b"Pour le titre uniquement :\nTermine par une question.\n")
+    assert proposals(scoped) == [
+        ("u2-ends-with-question-1", "candidate", "ends_with_question", True, "titre")
+    ]
+
+
 def test_too_many_units_are_refused_before_any_contract_exists():
     from skillflow_prompts.prompts import MAX_UNITS, TooLarge
 
@@ -911,6 +980,32 @@ def test_max_words_passes_at_the_limit_and_fails_above():
     # A term carrying no letter and no digit keeps the same neighbourhood rule.
     marks = {"verifier": "text", "parameters": {"not_contains": ["!!!"]}}
     assert not check(marks, {"message": b"attention !!! voila"})["passed"]
+    # Ending on a question: what decorates the end is ignored, what asserts is not.
+    question = {"verifier": "text", "parameters": {"ends_with_question": True}}
+    for accepted in (
+        "Qu'en penses-tu ?",
+        "**Qu'en penses-tu ?**",
+        "_Tu viens ?_",
+        "« Tu viens ? »",
+        "(tu viens ?)",
+        "Qu'en penses-tu ? 🙂",
+        "Qu'en penses-tu ?!",
+        "Qu'en penses-tu ?...",
+        "Qu'en penses-tu ?).",
+        # A question mark is not always the Latin one.
+        "你来吗？",
+        "هل تأتي؟",
+    ):
+        assert check(question, {"message": accepted.encode()})["passed"], accepted
+    for refused in (
+        "Tu viens.",
+        "Tu viens !",
+        "Tu viens…",
+        "Es-tu prêt ? Oui.",
+        "Es-tu prêt ? 2026",
+        "Es-tu prêt ? (voir ci-dessous)",
+    ):
+        assert not check(question, {"message": refused.encode()})["passed"], refused
     assert not check(obligation, {"message": b"un deux trois quatre"})["passed"]
     legacy = {"verifier": "text", "parameters": {"contains": ["x"]}}
     assert "words" not in check(legacy, {"message": b"x"})

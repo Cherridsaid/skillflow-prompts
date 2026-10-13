@@ -61,6 +61,32 @@ def standalone(text, term):
     return False
 
 
+# The question marks this file knows. The list is short on purpose and grows when someone
+# meets another one: guessing a character set is how a check becomes stronger than the
+# instruction for a language nobody tested.
+QUESTION_MARKS = ("?", "？", "؟")
+
+
+def asks(text):
+    """True when the answer ends on a question, read from the end in one pass.
+
+    The last character that is a letter, a digit or a question mark must be a question
+    mark. Everything else at the end is ignored -- closing quotes, brackets, markdown
+    marks, emojis, exclamation marks, spaces -- because ignoring a character can only
+    matter when a question mark stands behind it. An affirmation never slips through:
+    "Tu viens." falls back on a letter, and so does "Es-tu prêt ? Oui.".
+
+    A check may be weaker than the instruction and never stronger, and "ends with a
+    question" written in a prompt is about the question, not about its decoration.
+    """
+    for char in reversed(text):
+        if char in QUESTION_MARKS:
+            return True
+        if letter(char):
+            return False
+    return False
+
+
 def check(obligation, inputs):
     verifier, params = obligation["verifier"], obligation["parameters"]
     if verifier == "text":
@@ -80,6 +106,9 @@ def check(obligation, inputs):
         if "max_words" in params:
             counted = words(text)
             result.update(words=counted, passed=result["passed"] and counted <= params["max_words"])
+        if params.get("ends_with_question"):
+            ending = asks(text)
+            result.update(ends_with_question=ending, passed=result["passed"] and ending)
         return result
     if verifier == "json":
         try:

@@ -62,10 +62,13 @@ def test_rejection_correction_delivery_and_receipt_across_processes(tmp_path):
     code, compiled = chatgpt("prompt", "--root", root, "--file", prompt)
     assert code == 0, compiled
     # Unit 2 asks for a word: the substring check is mechanical, the word is not checked.
+    # Unit 3 asks to end on an open question: the question mark is checked, "ouverte" is
+    # not, so the same unit carries a check and a rule of meaning.
     assert [(r["unit"], r["kind"]) for r in compiled["units"]] == [
         (1, "mechanical"),
         (2, "mechanical"),
         (2, "semantic"),
+        (3, "mechanical"),
         (3, "semantic"),
     ]
 
@@ -90,7 +93,8 @@ def test_rejection_correction_delivery_and_receipt_across_processes(tmp_path):
     answer.write_text(RIGHT, encoding="utf-8")
     code, accepted = chatgpt("answer", "--root", root, "--file", answer)
     assert code == 0, accepted
-    assert accepted["counts"]["REJETE"] == 0 and accepted["counts"]["VERIFIE"] == 2
+    # Three checks pass now: the limit, the term, and the question the answer ends on.
+    assert accepted["counts"]["REJETE"] == 0 and accepted["counts"]["VERIFIE"] == 3
     assert accepted["rounds_used"] == 2
 
     # A new process reads the state back from disk.

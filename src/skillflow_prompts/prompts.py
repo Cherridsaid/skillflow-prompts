@@ -145,6 +145,47 @@ CONTAINS = [
         re.I,
     ),
 ]
+# Ending on a question is the one shape of an answer this tool reads. The wording is
+# explicit and nothing is inferred: "termine par une question", "end with a question". What
+# follows it in the unit -- "ouverte", "open" -- is not matched, so it stays in the residue
+# and the unit keeps its rule of meaning, which is exactly what it deserves: the tool reads
+# a question mark, not an open question.
+# The sentence must end right after "question", or carry only an adjective that narrows
+# what kind of question it is. "Termine par une question suivie de sa réponse" asks for
+# something else entirely, and checking the end of the answer for a question mark would
+# reject "Tu viens ? Oui.", which that instruction accepts. The adjective is looked at and
+# not eaten, so it stays in the residue and the unit keeps its rule of meaning: this tool
+# reads a question mark, never an open question. A narrowing word missing from this list
+# costs a check that is not claimed, which is the harmless side.
+NARROWING = (
+    r"ouvertes?|fermées?|fermees?|courtes?|simples?|directes?|précises?|precises?"
+    r"|claires?|open|short|direct|clear|genuine|real"
+)
+QUESTION_TAIL = rf"(?=\s*(?:[.!?]|$)|\s+(?:{NARROWING})\s*(?:[.!?]|$))"
+NARROWED = re.compile(rf"\b(?:{NARROWING})\b", re.I)
+ENDS_WITH_QUESTION = [
+    re.compile(
+        r"\b(?:termine|termines|finis|finit|conclus|conclut|ach[èe]ve|ach[èe]ves)[rz]?\s+"
+        # Only the answer as a whole. "Termine une phrase par une question" asks that of
+        # one sentence, and checking the end of the whole answer for it would reject
+        # "Tu viens ? Oui." -- stronger than the instruction, so nothing is claimed.
+        r"(?:(?:ta|la|cette|votre)\s+(?:réponse|reponse)\s+)?"
+        r"par\s+une\s+question\b" + QUESTION_TAIL,
+        re.I,
+    ),
+    re.compile(
+        r"\b(?:end|ends|finish|finishes|close|closes|conclude|concludes)\s+"
+        # English puts the narrowing word before the noun, so it is inside the match and
+        # cannot stay in the residue. `NARROWING` then marks the unit approximate, which is
+        # the same reserve by another route: nothing here checks that a question is open.
+        r"(?:(?:your|the|this)\s+(?:answer|reply)\s+)?with\s+an?\s+"
+        # The space belongs to the optional group and to nothing else: written outside it,
+        # two quantifiers share the same run of spaces and the reading turns quadratic.
+        # Measured before this form: 2 000 spaces 0,016 s, 4 000 0,047 s, 8 000 0,172 s.
+        r"(?:(?:open|short|direct|clear|genuine|real)\s+)?question\b" + QUESTION_TAIL,
+        re.I,
+    ),
+]
 # A rule that holds under a condition or as one of several alternatives is not an
 # unconditional rule: it stays a rule of meaning.
 # A word belonging to a recognized wording is never read as a condition about the unit:
@@ -658,6 +699,34 @@ def detect(text):
         approximate = approximate or bool(QUALIFIER.search(asked))
         if raw is not None and raw.group(1) != term:
             approximate = approximate or bool(EXACT.search(asked))
+    # The shape of the answer, read with the same three readings as everything else: a
+    # denial of it is set aside, a condition or a part makes it a candidate -- a question
+    # asked for in the title only would otherwise be checked on the whole answer, which is
+    # stronger than what was asked.
+    for pattern in ENDS_WITH_QUESTION:
+        for match in pattern.finditer(plain):
+            if covered[match.start()] or denied:
+                continue
+            if blocker:
+                propose(candidates, seen, "ends_with_question", True, blocker.group())
+                continue
+            if outside(scopes, *match.span()):
+                propose(
+                    candidates,
+                    seen,
+                    "ends_with_question",
+                    True,
+                    scoping[nearest(scopes, *match.span())],
+                )
+                continue
+            if ("ends_with_question", True) not in seen:
+                seen.add(("ends_with_question", True))
+                rules.append({"parameter": "ends_with_question", "value": True})
+            # A narrowing word swallowed by the match -- "an open question" -- is not
+            # checked by anything, so the unit stays under a rule of meaning for it.
+            approximate = approximate or bool(NARROWED.search(match.group()))
+            spans.append(match.span())
+            covered[match.start() : match.end()] = b"\1" * (match.end() - match.start())
     for pattern in CONTAINS:
         for match in pattern.finditer(text):
             if covered[match.start()]:
@@ -812,7 +881,8 @@ def compile_prompt(data, compiled_by="tool", confirmed=None, refused=None):
         if len(limits) > 1:
             raise Conflict(unit, "max_words " + " vs ".join(str(v) for v in sorted(limits)))
         for entry in mechanical:
-            value = entry["value"] if entry["parameter"] == "max_words" else [entry["value"]]
+            scalar = entry["parameter"] in ("max_words", "ends_with_question")
+            value = entry["value"] if scalar else [entry["value"]]
             obligations.append(
                 {
                     "id": entry["id"],

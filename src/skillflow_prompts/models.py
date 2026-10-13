@@ -170,7 +170,13 @@ class Contract(Strict):
                     raise ValueError("verifier role/kind mismatch")
                 p = obligation.parameters
                 allowed = {
-                    "text": {"contains", "not_contains", "min_length", "max_words"},
+                    "text": {
+                        "contains",
+                        "not_contains",
+                        "min_length",
+                        "max_words",
+                        "ends_with_question",
+                    },
                     "json": {"schema"},
                     "source": set(),
                     "connector": set(),
@@ -190,6 +196,7 @@ class Contract(Strict):
                         or p.get("min_length", 1) < 1
                         or type(p.get("max_words", 1)) is not int
                         or p.get("max_words", 1) < 1
+                        or type(p.get("ends_with_question", True)) is not bool
                     ):
                         raise ValueError("invalid text verifier parameters")
                 if obligation.verifier == "json":

@@ -282,6 +282,8 @@ def test_the_verifiers_document_names_what_the_code_does():
         "contains",
         "min_length",
         "not_contains",
+        "ends_with_question",
+        "U+FF1F",
         "independent_channel_required",
         "retrieval_integrity_only",
         "invalid_json",
