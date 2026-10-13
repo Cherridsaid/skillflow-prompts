@@ -20,6 +20,7 @@ from pathlib import Path
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from jsonschema import Draft202012Validator
 
 from . import __version__, prompts, receipts, verifiers
 from .api import READ
@@ -123,6 +124,29 @@ def refresh_compilation(path, compilation):
                 exit_code=3,
             )
     write_atomic(path, canonical(compilation))
+
+
+def installed():
+    """Refuse an installation that cannot validate a schema, before it is relied upon.
+
+    Windows resolves at most 260 characters per path unless long paths are enabled, and the
+    deepest file an installation creates sits about a hundred characters below the folder
+    one chooses. Past that, `uv sync --locked` truncates the installation **in silence**:
+    the data files of the schema specifications are the first to go, and the crash then
+    lands inside `verify`, after the reader believed their receipt was being checked. The
+    probe builds here what every check needs, so a missing file is named at the door.
+    """
+    try:
+        Draft202012Validator.check_schema({"type": "object"})
+    except Exception as exc:  # noqa: BLE001 - whatever fails here, nothing can be checked
+        raise Refusal(
+            "INSTALL_INCOMPLETE",
+            f"This installation cannot validate a schema: {type(exc).__name__}: {exc}",
+            "Reinstall under a short path: on Windows, a chosen folder over about 150 "
+            "characters truncates the installation in silence. Unzip into C:\\sfp, then "
+            "run uv sync --locked again",
+            exit_code=2,
+        ) from exc
 
 
 def read_input(value, limit=MAX_INPUT):
@@ -1391,6 +1415,9 @@ def parser():
 def run(argv):
     try:
         args = parser().parse_args(argv)
+        # Asked of every action, not of `init` alone: the verification at home starts at
+        # `verify` and never runs `init`.
+        installed()
         return ACTIONS[args.action](args)
     except Help as exc:
         return 0, {"ok": True, "usage": exc.text, "summary": "Aide."}

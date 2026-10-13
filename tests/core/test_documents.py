@@ -93,3 +93,137 @@ def test_chatgpt_md_carries_the_steps_a_new_conversation_needs():
     # The limits are part of the instructions, not a footnote to drop.
     assert "fictive" in text
     assert "answer.txt" in text
+    # Measured on 2026-10-13: past about 150 characters of path, Windows truncates the
+    # install in silence. The instructions must name the short path and the refusal.
+    assert "C:\\sfp" in text and "INSTALL_INCOMPLETE" in text
+    # Warnings on stderr are not failures, and the reader must not stop on one.
+    assert "Ignore `stderr`" in text
+
+
+REQUIRED = {
+    "README.md": (
+        # The claim is made in the form that can be defended.
+        "We have not found an equivalent",
+        # What was run, when, and on what -- not a compatibility promise.
+        "13 October 2026",
+        "ChatGPT (work mode)",
+        "claude.ai",
+        # The counter-test is what gives the verification its value.
+        "ANSWER_CHANGED",
+        # The limits, in the README itself and not only in a document behind it.
+        "fictive",
+        "NOT_RUN",
+        "`NON_VERIFIE`",
+        # The install trap, named with its refusal.
+        "INSTALL_INCOMPLETE",
+        "C:\\sfp",
+        # The documents a reader needs next.
+        "[DEMO.md](DEMO.md)",
+        "[docs/verifiers.md](docs/verifiers.md)",
+        "synthetic",
+    ),
+    "README.fr.md": (
+        "Nous n'avons pas trouvé d'équivalent",
+        "13 octobre 2026",
+        "ChatGPT (mode travail)",
+        "claude.ai",
+        "ANSWER_CHANGED",
+        "fictive",
+        "NOT_RUN",
+        "`NON_VERIFIE`",
+        "INSTALL_INCOMPLETE",
+        "C:\\sfp",
+        "[DEMO.md](DEMO.md)",
+        "[docs/verifiers.md](docs/verifiers.md)",
+        "synthétiques",
+    ),
+}
+
+
+@pytest.mark.parametrize("name", ["README.md", "README.fr.md"])
+def test_the_readme_states_the_claim_in_its_defensible_form(name):
+    """A README is where a claim becomes a promise, so each one must be checkable.
+
+    "We have not found an equivalent" can be defended by whoever looked. "There is none"
+    cannot be defended at all, and nothing in this repository could support it.
+    """
+    text = read(name)
+    for phrase in REQUIRED[name]:
+        assert phrase in text, phrase
+    for absolute in ("there is no equivalent", "il n'existe pas d'équivalent"):
+        assert absolute not in text.lower(), absolute
+
+
+def script(name):
+    """A script of this repository, loaded by path: `scripts` is not a package."""
+    import importlib.util
+
+    path = ROOT / "scripts" / name
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_demo_md_is_written_by_the_demo_and_by_nothing_else(tmp_path):
+    """DEMO.md is rendered from a demo run, so it cannot describe a run that never was.
+
+    The demo is run again here and rendered the same way: a figure changed by hand in that
+    document, or a refusal the demo stopped returning, fails this test.
+    """
+    generator = script("demo_md.py")
+    rendered = generator.render(generator.run(tmp_path / "root"))
+    assert rendered == read("DEMO.md")
+
+
+def test_the_verifiers_document_names_what_the_code_does():
+    """The one rule a reader is most likely to disagree with is how a word is counted."""
+    from skillflow_prompts import verifiers
+
+    text = read("docs/verifiers.md")
+    for name in (
+        "`text`",
+        "`json`",
+        "`source`",
+        "max_words",
+        "contains",
+        "min_length",
+        "independent_channel_required",
+        "retrieval_integrity_only",
+        "invalid_json",
+        "verifiers_sha256",
+    ):
+        assert name in text, name
+    # Every invisible filler the code separates words on is written down, by codepoint:
+    # adding one to the set without documenting it fails here.
+    for char in verifiers.INVISIBLE:
+        assert f"U+{ord(char):04X}" in text, char
+
+
+MARKDOWN = sorted(
+    path
+    for path in ROOT.rglob("*.md")
+    if not {".venv", ".git", ".claude", "node_modules", "__pycache__"} & set(path.parts)
+)
+
+
+def test_every_link_between_these_documents_resolves():
+    """A dead link in a README is a promise the reader cannot follow.
+
+    Checked offline on purpose: a checker that reaches the network turns a red build into
+    news about someone else's server, and a build that goes red for reasons outside the
+    product teaches everyone to ignore it.
+    """
+    import re
+
+    broken = []
+    for path in MARKDOWN:
+        for label, target in re.findall(
+            r"\[([^\]]*)\]\(([^)]+)\)", path.read_text(encoding="utf-8")
+        ):
+            if target.startswith(("http://", "https://", "mailto:", "#")):
+                continue
+            anchor = target.partition("#")[0]
+            if anchor and not (path.parent / anchor).exists():
+                broken.append(f"{path.relative_to(ROOT)} -> {target} [{label}]")
+    assert not broken, broken

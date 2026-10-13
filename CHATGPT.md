@@ -30,6 +30,16 @@ Si `uv sync --locked` échoue, **arrête-toi** et donne-moi l'erreur telle quell
 ne peut pas démarrer sans ses dépendances, et je ne veux pas d'un contournement qui
 installerait autre chose que le verrou.
 
+Deux choses à savoir sur l'environnement :
+
+- **Chemin court obligatoire sous Windows.** Décompresse dans un dossier court, par exemple
+  `C:\sfp`. Au-delà d'environ 150 caractères de chemin, Windows tronque l'installation
+  **en silence** et il manque des fichiers de données. L'outil refuse alors de tourner,
+  sous `INSTALL_INCOMPLETE` : réinstalle dans un chemin plus court, ne contourne pas.
+- **Ignore `stderr`.** Certains environnements y écrivent des avertissements, par exemple
+  sur `UV_NATIVE_TLS`. Ce n'est pas une erreur. Ce qui compte est `stdout`, qui porte
+  **un seul objet JSON** par commande, et le code de sortie.
+
 ### Essai d'une minute, tout de suite après `init`
 
 N'attends pas un vrai prompt de ma part pour savoir si l'installation marche. Écris deux

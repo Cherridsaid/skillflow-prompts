@@ -1051,6 +1051,43 @@ def test_a_confirmation_raises_a_candidate_into_a_check_and_the_receipt_says_who
     assert code == 1 and refused["error"]["code"] == "CONTRACT_CHANGED"
 
 
+def test_an_incomplete_installation_is_refused_before_anything_is_checked(tmp_path, monkeypatch):
+    """An install that cannot validate a schema must say so, not crash mid-verification.
+
+    Measured on this machine on 2026-10-13: Windows resolves at most 260 characters per
+    path unless long paths are enabled, which they are not here, and the deepest file an
+    install creates sits 103 characters below the project folder. Past about 150 characters
+    of chosen path, `uv sync --locked` truncates the install **in silence**: data files of
+    `jsonschema_specifications` disappear and the crash lands inside `verify`, after the
+    reader believed their receipt was being checked. Every action is covered, because the
+    verification at home starts at `verify` and never runs `init`.
+    """
+    from skillflow_prompts import chatgpt as launcher
+
+    def missing(_schema):
+        raise FileNotFoundError(2, "No such file or directory", "format-annotation")
+
+    monkeypatch.setattr(launcher.Draft202012Validator, "check_schema", staticmethod(missing))
+    root = tmp_path / "travail"
+    for argv in (
+        ["init", "--root", str(root)],
+        [
+            "verify",
+            "--receipt",
+            str(tmp_path / "receipt.json"),
+            "--answer",
+            str(tmp_path / "a.txt"),
+        ],
+        ["status", "--root", str(root)],
+    ):
+        code, refused = launcher.run(argv)
+        assert code == 2 and refused["error"]["code"] == "INSTALL_INCOMPLETE", argv
+        assert "format-annotation" in refused["error"]["message"], argv
+        assert "short path" in refused["error"]["hint"] and "C:\\sfp" in refused["error"]["hint"]
+    # The refusal comes before any work: nothing was created, nothing was read.
+    assert not root.exists()
+
+
 def test_a_check_can_be_raised_after_an_answer_but_never_lowered(tmp_path):
     """Seeing a candidate, then deciding to have it checked, is the human order of things.
 
