@@ -73,6 +73,13 @@ def test_chatgpt_md_carries_the_steps_a_new_conversation_needs():
         # The verification run at home carries no anchor from the same zip.
         "--receipt receipt.json --answer answer.txt --prompt prompt.txt",
         "non ancrée",
+        # A candidate is shown and never rejects; only a named confirmation makes it a check.
+        "chatgpt confirm",
+        "CANDIDAT",
+        "demoted_by",
+        "--by said",
+        "CONFIRM_AFTER_ANSWER",
+        "jamais rejeté",
     ):
         assert step in text, step
     # The same guarantee the READMEs never claim: the tool does not lock the loop.

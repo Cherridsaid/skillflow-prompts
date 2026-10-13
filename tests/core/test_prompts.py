@@ -4,7 +4,14 @@ import pytest
 from pydantic import ValidationError
 
 from skillflow_prompts.models import Contract
-from skillflow_prompts.prompts import Conflict, compile_prompt, detect, normalize, units
+from skillflow_prompts.prompts import (
+    Confirmation,
+    Conflict,
+    compile_prompt,
+    detect,
+    normalize,
+    units,
+)
 from skillflow_prompts.verifiers import check, words
 
 ACUTE = chr(0x301)
@@ -220,7 +227,7 @@ def test_units_are_the_numbered_non_empty_lines():
     ],
 )
 def test_detection_is_explicit_or_falls_back_to_meaning(text, rules, meaning):
-    found, residual = detect(text)
+    found, residual, _ = detect(text)
     assert [(r["parameter"], r["value"]) for r in found] == rules
     assert residual is meaning
 
@@ -259,7 +266,7 @@ def test_a_long_unit_is_read_once_not_explored(build):
 
     text = build()
     started = time.monotonic()
-    rules, _ = detect(text)
+    rules, _, _ = detect(text)
     assert rules, text[:20]
     assert time.monotonic() - started < 1.0
 
@@ -298,7 +305,11 @@ def test_a_fenced_block_is_text_the_prompt_carries_not_wording_it_states():
         )
         obligations = quoted["contract"]["steps"][0]["obligations"]
         assert [o["id"] for o in obligations] == ["answer-present"], fence
-        assert [e["class"] for u in quoted["units"] for e in u["obligations"]] == ["semantic"] * 5
+        # Carried, the rules are proposed under the mark that carries them, never applied.
+        assert proposals(quoted) == [
+            ("u3-max-words", "candidate", "max_words", 3, fence),
+            ("u4-contains-1", "candidate", "contains", "Paris", fence),
+        ], fence
     # Only a fence at least as long as the opening one closes the block.
     longer = compile_prompt(b"Copy this text verbatim:\n````text\n```\nAt most 3 words.\n````\n")
     assert [o["id"] for o in longer["contract"]["steps"][0]["obligations"]] == ["answer-present"]
@@ -354,6 +365,215 @@ def test_a_quotation_and_an_indented_block_are_text_the_prompt_carries():
     assert [o["id"] for o in inside["contract"]["steps"][0]["obligations"]] == ["u1-max-words"]
 
 
+# The four prompts the adversarial reviewer measured in P2b: three of them produced no
+# mechanical check at all, because a part word in a context line scoped everything below.
+MEASURED = {
+    "A": 'Rédige un résumé de ce texte.\nAu maximum 120 mots.\nMentionne "hypnose".\n',
+    "B": 'Fais-moi un résumé en 120 mots maximum.\nCite le terme "hypnose".\n',
+    "C": (
+        "Écris un article sur Tarcienne.\nLongueur : 800 mots maximum.\n"
+        'Le mot "Tarcienne" doit apparaître.\n'
+    ),
+    "D": 'Au maximum 120 mots.\nMentionne "hypnose".\n',
+}
+
+
+def proposals(compiled):
+    """Every mechanical rule or candidate of a compilation, in order, with its reason."""
+    return [
+        (e["id"], e["class"], e["parameter"], e["value"], e.get("demoted_by"))
+        for unit in compiled["units"]
+        for e in unit["obligations"]
+        if e["class"] != "semantic"
+    ]
+
+
+def test_every_limit_and_term_of_the_measured_prompts_is_proposed_then_checked_once_confirmed():
+    """Said's criterion for P3, on the four prompts measured by the reviewer.
+
+    Each limit and each required term appears, as a candidate named with the word that set
+    it aside or as a rule when nothing did; unconfirmed, a candidate is no obligation of
+    the contract, so it can never reject; confirmed, it is checked.
+    """
+    expected = {
+        "A": [
+            ("u2-max-words", "candidate", "max_words", 120, "résumé"),
+            ("u3-contains-1", "candidate", "contains", "hypnose", "résumé"),
+        ],
+        "B": [
+            ("u1-max-words", "candidate", "max_words", 120, "résumé"),
+            ("u2-contains-1", "candidate", "contains", "hypnose", "résumé"),
+        ],
+        # "article" names no part of an answer in this compiler: nothing is set aside.
+        "C": [
+            ("u2-max-words", "mechanical", "max_words", 800, None),
+            ("u3-contains-1", "mechanical", "contains", "Tarcienne", None),
+        ],
+        "D": [
+            ("u1-max-words", "mechanical", "max_words", 120, None),
+            ("u2-contains-1", "mechanical", "contains", "hypnose", None),
+        ],
+    }
+    for name, prompt in MEASURED.items():
+        compiled = compile_prompt(prompt.encode())
+        assert proposals(compiled) == expected[name], name
+        checked = [o["id"] for o in compiled["contract"]["steps"][0]["obligations"]]
+        for ident, klass, *_ in expected[name]:
+            assert (ident in checked) == (klass == "mechanical"), (name, ident)
+        assert compiled["confirmed_by"] is None and compiled["confirmed"] == {}
+        candidates = [p[0] for p in expected[name] if p[1] == "candidate"]
+        if not candidates:
+            continue
+        confirmed = compile_prompt(prompt.encode(), confirmed=dict.fromkeys(candidates, "said"))
+        checked = [o["id"] for o in confirmed["contract"]["steps"][0]["obligations"]]
+        assert all(ident in checked for ident in candidates), name
+        raised = {e["id"]: e for u in confirmed["units"] for e in u["obligations"]}
+        for ident in candidates:
+            assert (
+                raised[ident]["class"] == "mechanical" and raised[ident]["confirmed_by"] == "said"
+            )
+            # The word that set it aside stays on record beside who overrode it.
+            assert raised[ident]["demoted_by"] == "résumé"
+        # The confirmations are part of the signed contract, and change its identity.
+        origin = confirmed["contract"]["origin"]
+        assert "confirmed:" + ",".join(f"{c}=said" for c in sorted(candidates)) + ";" in origin
+        assert confirmed["contract_ref"] != compiled["contract_ref"]
+        assert confirmed["confirmed"] == dict.fromkeys(sorted(candidates), "said")
+        assert confirmed["confirmed_by"] == ["said"]
+
+
+def test_a_confirmation_can_also_lower_a_rule_and_names_who_did():
+    lowered = compile_prompt(MEASURED["D"].encode(), refused={"u1-max-words": "said"})
+    assert proposals(lowered) == [
+        ("u1-max-words", "candidate", "max_words", 120, None),
+        ("u2-contains-1", "mechanical", "contains", "hypnose", None),
+    ]
+    # Who refused is named apart from any word of the prompt.
+    refused = {e["id"]: e for u in lowered["units"] for e in u["obligations"]}["u1-max-words"]
+    assert refused["refused_by"] == "said" and "demoted_by" not in refused
+    assert [o["id"] for o in lowered["contract"]["steps"][0]["obligations"]] == ["u2-contains-1"]
+    assert "refused:u1-max-words=said;" in lowered["contract"]["origin"]
+    assert lowered["confirmed_by"] == ["said"]
+
+
+def test_a_confirmation_naming_an_unknown_obligation_is_refused_with_the_known_ones():
+    with pytest.raises(Confirmation) as caught:
+        compile_prompt(MEASURED["A"].encode(), confirmed={"u9-max-words": "said"})
+    assert caught.value.unknown == ["u9-max-words"]
+    assert caught.value.known == ["u2-max-words", "u3-contains-1"]
+    # A contract without confirmations keeps the origin it had: nothing changes for them.
+    assert "confirmed" not in compile_prompt(MEASURED["D"].encode())["contract"]["origin"]
+
+
+def test_what_a_denial_an_alternative_or_a_carried_line_sets_aside_is_proposed_under_its_word():
+    # A denial sets aside the opposite instruction: confirming it as a limit or a required
+    # term would invert the prompt, so nothing is proposed. It stays a rule of meaning.
+    assert detect("Do not use at most 3 words.") == ([], True, [])
+    assert detect('Never include "SkillFlow".') == ([], True, [])
+    # A denial wins over a scope: denied and scoped at once, the limit is proposed to no one.
+    assert detect("Do not use at most 3 words in the title.") == ([], True, [])
+    # Two overlapping wordings are one limit: the denial after the second one reaches the
+    # first, which "or" had scoped, and nothing is proposed.
+    assert detect("At most 3 words or fewer is not acceptable.") == ([], True, [])
+    assert detect("Max. 3 words or fewer is not acceptable.") == ([], True, [])
+    # A denial announced as a heading forbids what follows: nothing below it is proposed.
+    for heading in (
+        "Do not do the following:",
+        "Ne fais jamais ceci :",
+        # A heading that names a part and denies at once forbids: the denial wins.
+        "Do not do the following in the title:",
+        "Ne fais jamais ceci dans le titre :",
+    ):
+        forbidden = compile_prompt(
+            (
+                heading + '\nAt most 3 words.\nInclude "Paris".\n'
+                'Mention "Lille" or mention "Lyon".\nTitre : 3 mots maximum.\n'
+                "    At most 4 words.\n> At most 5 words.\n```\nAt most 6 words.\n```\n"
+            ).encode()
+        )
+        # The lines' own candidates, from an alternative, a scope or a carrying mark, vanish
+        # with the rest: the denial wins over every other reading.
+        assert proposals(forbidden) == [], heading
+        assert [o["id"] for o in forbidden["contract"]["steps"][0]["obligations"]] == [
+            "answer-present"
+        ]
+    # A negation that belongs to a recognized limit denies nothing: this heading scopes.
+    scoped = compile_prompt("Pas plus de 3 mots par titre :\nMentionne « Paris ».\n".encode())
+    assert proposals(scoped) == [
+        # The heading's own limit is per title: proposed under "par", not applied.
+        ("u1-max-words", "candidate", "max_words", 3, "par"),
+        ("u2-contains-1", "candidate", "contains", "Paris", "titre"),
+    ]
+    # A condition announced as a heading, by contrast, proposes what it scopes.
+    conditional = compile_prompt(b"If you discuss France:\nAt most 3 words.\n")
+    assert proposals(conditional) == [("u2-max-words", "candidate", "max_words", 3, "If")]
+    # A denial announced under a scope already open still bans what follows: the scope
+    # keeps its word, the ban is a flag of its own, and the forbidden limit is unknown to a
+    # confirmation.
+    nested = b"For the title only:\nDo not do the following:\nAt most 3 words.\n"
+    assert proposals(compile_prompt(nested)) == []
+    with pytest.raises(Confirmation):
+        compile_prompt(nested, confirmed={"u3-max-words": "alice"})
+    assert detect("Titre : pas plus de 3 mots.")[2] == [
+        {"parameter": "max_words", "value": 3, "demoted_by": "Titre"}
+    ]
+    # A verb this module does not know asks for nothing, so there is nothing to propose.
+    assert detect('Never write "SkillFlow".') == ([], True, [])
+    # A requirement that says more than the pattern reads is not read at all: "0 fois"
+    # would otherwise become a positive obligation.
+    assert detect('Le mot "X" doit apparaître 0 fois.') == ([], True, [])
+    assert detect('The word "X" must appear twice.') == ([], True, [])
+    # A colon or a comma after the verb announces a precision, which is not read either.
+    assert detect('The word "X" must appear: 0 times.') == ([], True, [])
+    assert detect('Le mot "X" doit apparaître, deux fois.') == ([], True, [])
+    assert detect('Le mot "X" doit apparaître ; jamais ailleurs.') == ([], True, [])
+    assert detect('Le mot "X" doit apparaître.')[0] == [{"parameter": "contains", "value": "X"}]
+    # Each term is introduced by its own verb; the alternative between them sets both aside.
+    rules, _, candidates = detect("Mentionne « Paris » ou mentionne « Lyon ».")
+    assert rules == []
+    assert [(c["value"], c["demoted_by"]) for c in candidates] == [("Paris", "ou"), ("Lyon", "ou")]
+    # Two wordings of one limit, one of them scoped by its own "or": one rule, no candidate
+    # beside it, since the candidate would only repeat a check that already exists.
+    rules, meaning, candidates = detect("At most 3 words or fewer.")
+    assert rules == [{"parameter": "max_words", "value": 3}] and candidates == []
+    # The second wording is not covered by the rule's span, so a residue stays: conservative.
+    assert meaning
+    # A limit scoped to a part of the answer, inside its own unit, is proposed under it.
+    rules, _, candidates = detect("Titre : 3 mots maximum.")
+    assert rules == [] and candidates == [
+        {"parameter": "max_words", "value": 3, "demoted_by": "Titre"}
+    ]
+    # A carried line proposes its rules under the mark that carries them.
+    quoted = compile_prompt(b"Traduis :\n> Au plus 3 mots.\n")
+    assert proposals(quoted) == [("u2-max-words", "candidate", "max_words", 3, ">")]
+    fenced = compile_prompt(b"Recopie :\n```\nAt most 3 words.\n```\n")
+    assert proposals(fenced) == [("u3-max-words", "candidate", "max_words", 3, "```")]
+    # A fence is named by three of its characters whatever its length: the mark is stored
+    # once per carried line, and a prompt made of a huge fence must not multiply it.
+    huge = compile_prompt(("~" * 10_000 + "\nAt most 3 words.\n" + "~" * 10_000 + "\n").encode())
+    assert proposals(huge) == [("u2-max-words", "candidate", "max_words", 3, "~~~")]
+    # What a carried line would itself have proposed is text as well, under the same mark.
+    carried_alternative = compile_prompt(b'Traduis :\n> Mention "Lille" or mention "Lyon".\n')
+    assert proposals(carried_alternative) == [
+        ("u2-contains-1", "candidate", "contains", "Lille", ">"),
+        ("u2-contains-2", "candidate", "contains", "Lyon", ">"),
+    ]
+
+
+def test_a_heading_made_of_thousands_of_limits_is_read_once():
+    """Reading a heading for a denial must stay linear: a negation belonging to one of
+    thirty thousand limit wordings is placed by bisection, not by scanning them all."""
+    import time
+
+    hostile = ("Pas plus de 3 mots. " * 30_000 + ":\nMentionne « Paris ».\n").encode()
+    started = time.monotonic()
+    compiled = compile_prompt(hostile)
+    assert time.monotonic() - started < 2.0
+    # Every "Pas" belongs to a recognized limit: the heading denies nothing and names no
+    # part, so the term below it is a plain rule, neither forbidden nor set aside.
+    assert proposals(compiled)[-1][:4] == ("u2-contains-1", "mechanical", "contains", "Paris")
+
+
 def test_many_rules_on_one_line_are_refused_before_anything_is_serialized():
     """Each obligation repeats its unit: that expansion is counted, not discovered later."""
     import time
@@ -377,7 +597,13 @@ def test_a_limit_announced_for_one_part_of_the_answer_is_not_applied_to_all_of_i
         b"For the title only:\n  Constraints:\n    At most 3 words.\nThen write the body.\n"
     )
     assert [o["id"] for o in scoped["contract"]["steps"][0]["obligations"]] == ["answer-present"]
-    assert [e["class"] for u in scoped["units"] for e in u["obligations"]] == ["semantic"] * 4
+    # The limit is not applied, and not lost either: proposed under what set it aside. Here
+    # the four-space indentation carries the line before any scope is read, and the word
+    # says so; written flush left, the same limit is proposed under the announcing word.
+    assert proposals(scoped) == [("u3-max-words", "candidate", "max_words", 3, "indentation")]
+    flush = compile_prompt(b"For the title only:\nAt most 3 words.\nThen write the body.\n")
+    assert [o["id"] for o in flush["contract"]["steps"][0]["obligations"]] == ["answer-present"]
+    assert proposals(flush) == [("u2-max-words", "candidate", "max_words", 3, "title")]
     # A neutral sub-heading does not restore a whole-answer scope.
     nested = compile_prompt(
         "Pour le titre uniquement :\n  Consignes :\n  Au plus 3 mots.\n"
@@ -457,6 +683,38 @@ def test_a_limit_announced_for_one_part_of_the_answer_is_not_applied_to_all_of_i
     # A heading that announces no part of the answer leaves the limits below it alone.
     plain = compile_prompt(b"Consignes :\nAt most 3 words.\n")
     assert [o["id"] for o in plain["contract"]["steps"][0]["obligations"]] == ["u2-max-words"]
+
+
+def test_a_limit_set_aside_costs_the_term_beside_it_nothing():
+    """A word inside a recognized limit says nothing about the unit holding it.
+
+    Reported by the reviewer on the P3 tree: "Pas plus de 3 mots dans le titre. Mentionne
+    « Paris »." lost the term altogether. The limit was set aside under "titre", so its
+    wording stayed visible to the denial read for terms, and the "pas" of "pas plus de"
+    was read as a denial of the unit. A scope must cost the term beside it nothing.
+    """
+    for text, word in (
+        ("Pas plus de 3 mots dans le titre. Mentionne « Paris ».", "titre"),
+        ("3 mots ou moins dans le titre. Mentionne « Paris ».", "titre"),
+        ('No more than 3 words in the title. Include "Paris".', "title"),
+    ):
+        compiled = compile_prompt(text.encode())
+        # The term is checked, and the limit is still proposed under the part it names.
+        assert proposals(compiled) == [
+            ("u1-contains-1", "mechanical", "contains", "Paris", None),
+            ("u1-max-words", "candidate", "max_words", 3, word),
+        ], text
+    # A denial of its own, standing outside every recognized wording, still denies the
+    # term: a confirmation must never be able to invert what the prompt says.
+    for text in (
+        "N'utilise pas au plus 3 mots dans le titre. Mentionne « Paris ».",
+        "Au plus 3 mots dans le titre, ce n'est pas acceptable. Mentionne « Paris ».",
+    ):
+        denied = compile_prompt(text.encode())
+        assert all(entry[2] != "contains" for entry in proposals(denied)), text
+    # An alternative of its own still proposes the term under that word.
+    beside = compile_prompt("Soit Paris soit Lyon. Mentionne « Paris ».".encode())
+    assert proposals(beside) == [("u1-contains-1", "candidate", "contains", "Paris", "Soit")]
 
 
 def test_too_many_units_are_refused_before_any_contract_exists():

@@ -102,6 +102,29 @@ def write_once(path, data):
     write_atomic(path, data)
 
 
+def refresh_compilation(path, compilation):
+    """A compilation is derived from its contract, never the other way round.
+
+    A record stored by an earlier version of this tool describes the same contract with
+    fewer fields: it is replaced by the current derivation, not refused, so a root created
+    before an update keeps working. Other bytes for another contract remain a conflict,
+    exactly as for every content-addressed file.
+    """
+    if path.exists():
+        try:
+            stored = strict_json(path.read_bytes()).get("contract_sha256")
+        except ValueError:
+            stored = None
+        if stored != compilation["contract_sha256"]:
+            raise Refusal(
+                "STATE_CONFLICT",
+                f"{path.name} already exists for another contract",
+                "The state root was modified outside the tool; start a new root with init",
+                exit_code=3,
+            )
+    write_atomic(path, canonical(compilation))
+
+
 def read_input(value, limit=MAX_INPUT):
     path = Path(value)
     try:
@@ -269,9 +292,28 @@ def evaluate(compilations, answer):
                     row.update(
                         status="NON_VERIFIE", check="sens", detail="règle de sens, non contrôlée"
                     )
+                elif entry["class"] == "candidate":
+                    # A candidate has no obligation in the contract, so nothing here can
+                    # reject the answer on its account: it is shown, with the word that set
+                    # it aside and the way to confirm it.
+                    reason = (
+                        f"refusé par {entry['refused_by']}"
+                        if "refused_by" in entry
+                        else f"mis de côté par « {entry['demoted_by']} »"
+                    )
+                    row.update(
+                        status="CANDIDAT",
+                        check=describe(entry),
+                        detail=f"candidat non confirmé, {reason} : affiché, jamais rejeté ; "
+                        f"chatgpt confirm --id {entry['id']}",
+                    )
                 else:
                     result = verifiers.check(obligations[entry["id"]], {"message": answer})
                     row.update(check=describe(entry), **verdict(entry, result))
+                    # A check that exists because someone confirmed it says so, by name:
+                    # the receipt tells who confirmed each obligation, not who spoke last.
+                    if "confirmed_by" in entry:
+                        row["detail"] += f" ; confirmé par {entry['confirmed_by']}"
                 rows.append(row)
     return rows
 
@@ -303,7 +345,7 @@ def verdict(entry, result):
 
 
 def counts(rows):
-    keys = ("VERIFIE", "REJETE", "ATTESTE", "NON_VERIFIE", "CONTEXTE")
+    keys = ("VERIFIE", "REJETE", "CANDIDAT", "ATTESTE", "NON_VERIFIE", "CONTEXTE")
     return {key: sum(row["status"] == key for row in rows) for key in keys}
 
 
@@ -424,19 +466,31 @@ def action_prompt(args):
         ) from exc
     except prompts.TooLarge as exc:
         raise Refusal("PROMPT_TOO_LARGE", str(exc), "Shorten the prompt", exit_code=2) from exc
+    status, cancelled = open_case(root, session, compilation, "a new prompt")
+    return 0, opened(status, cancelled, compilation)
+
+
+def open_case(root, session, compilation, reason):
+    """Store a compilation, register its prompt as the skill of a profile, cancel the other
+    open ChatGPT cases and admit this one. Returns the case status and what was cancelled.
+
+    Shared by `prompt` and `confirm`: a confirmation compiles a new contract, so it opens a
+    new case exactly the way a new prompt does, and names the one it closes.
+    """
     # The receipt will carry the contract, the unit rows and the snapshot: refuse now, before
-    # anything is written, a prompt whose receipt could not be read back by verify.
+    # anything is written, a compilation whose receipt could not be read back by verify.
+    # Held here so that a confirmation is bounded exactly as a prompt is.
     if 3 * len(canonical(compilation)) > MAX_RECEIPT // 2:
         raise Refusal(
             "PROMPT_TOO_LARGE",
             "The receipt of this prompt would exceed what verify accepts",
-            "Shorten the prompt",
+            "Shorten the prompt, or confirm fewer obligations",
             exit_code=2,
         )
     contract, ref = compilation["contract"], compilation["contract_ref"]
     name = prompts.profile_name([ref])
     write_once(root / "contracts" / (contract["id"] + ".json"), canonical(contract))
-    write_once(root / "compilations" / (contract["id"] + ".json"), canonical(compilation))
+    refresh_compilation(root / "compilations" / (contract["id"] + ".json"), compilation)
     prompt_bytes = contract["instructions"].encode("utf-8")
     write_once(session.workspace / ".chatgpt" / "skills" / name / "SKILL.md", prompt_bytes)
     config = strict_json((root / "config.json").read_bytes())
@@ -449,9 +503,7 @@ def action_prompt(args):
     cancelled = []
     for case in session.open_cases():
         if case["profile"] != name:
-            session.call(
-                "operator", "flow_cancel", {"case_id": case["id"], "reason": "a new prompt"}
-            )
+            session.call("operator", "flow_cancel", {"case_id": case["id"], "reason": reason})
             cancelled.append(case["id"])
     status = session.admit(name)
     current = session.state.get("current") or {}
@@ -464,31 +516,135 @@ def action_prompt(args):
         }
     session.state["current"] = current
     session.save()
-    rows = [
-        {
-            "unit": unit["n"],
-            "text": unit["text"],
-            "id": entry["id"],
-            "kind": entry["class"],
-            "check": "sens" if entry["class"] == "semantic" else describe(entry),
-        }
-        for unit in compilation["units"]
-        for entry in unit["obligations"]
-    ]
-    return 0, {
+    return status, cancelled
+
+
+def opened(status, cancelled, compilation):
+    """What `prompt` and `confirm` both answer once a case is open on a compilation."""
+    rows = []
+    for unit in compilation["units"]:
+        for entry in unit["obligations"]:
+            row = {
+                "unit": unit["n"],
+                "text": unit["text"],
+                "id": entry["id"],
+                "kind": entry["class"],
+                "check": "sens" if entry["class"] == "semantic" else describe(entry),
+            }
+            for key in ("demoted_by", "confirmed_by", "refused_by"):
+                if key in entry:
+                    row[key] = entry[key]
+            rows.append(row)
+    candidates = [r["id"] for r in rows if r["kind"] == "candidate"]
+    summary = (
+        f"{len(compilation['units'])} unités, "
+        f"{sum(r['kind'] == 'mechanical' for r in rows)} contrôles mécaniques, "
+        f"{len(candidates)} candidats affichés mais jamais rejetés, "
+        f"{sum(r['kind'] == 'semantic' for r in rows)} règles de sens (NON_VERIFIE). "
+    )
+    if candidates:
+        summary += (
+            "Les candidats attendent une confirmation humaine : chatgpt confirm --by <qui> "
+            "--id <identifiant> pour en faire un contrôle, --refuse <identifiant> pour en "
+            "retirer un. Sinon, "
+        )
+    summary += "écrire la réponse dans un fichier, puis chatgpt answer --file <fichier>."
+    return {
         "ok": True,
         "case_id": status["case_id"],
-        "contract": ref,
+        "contract": compilation["contract_ref"],
         "contract_sha256": compilation["contract_sha256"],
         "prompt_sha256": compilation["prompt_sha256"],
         "compiled_by": compilation["compiled_by"],
+        "confirmed": compilation["confirmed"],
+        "refused": compilation["refused"],
+        "confirmed_by": compilation["confirmed_by"],
         "units": rows,
         "cancelled_cases": cancelled,
-        "summary": f"{len(compilation['units'])} unités, "
-        f"{sum(r['kind'] == 'mechanical' for r in rows)} contrôles mécaniques, "
-        f"{sum(r['kind'] == 'semantic' for r in rows)} règles de sens (NON_VERIFIE). "
-        "Prochaine étape : écrire la réponse dans un fichier, puis chatgpt answer --file <fichier>.",
+        "summary": summary,
     }
+
+
+def action_confirm(args):
+    """Raise candidates into checks, or lower checks into candidates, under a name.
+
+    A confirmation compiles a new contract from the same prompt, so the case opened on the
+    old one is cancelled and a new one admitted, and the receipt will carry who confirmed.
+    It is refused once an answer has been submitted: nobody chooses the rules of a copy
+    after reading it.
+    """
+    root = root_path(args.root)
+    session = Session(root)
+    current, status = current_case(session)
+    if status["state"] in TERMINAL:
+        raise Refusal(
+            "CASE_CLOSED",
+            f"The case is {status['state']}",
+            "Paste the next prompt: chatgpt prompt --file <prompt>",
+        )
+    if session.rounds(current["case_id"]):
+        raise Refusal(
+            "CONFIRM_AFTER_ANSWER",
+            "An answer was already checked against this prompt",
+            "Confirm before the first answer; paste the prompt again to start over",
+            exit_code=2,
+        )
+    # The name enters the contract's origin line, where fields are separated by ";" and
+    # read back by `verify`, and the receipt shows it as a plain identifier. A free-form
+    # name would be cut at its first ";" and the recompiled contract would no longer be
+    # this one: only a plain identifier is accepted, and anything else is refused here.
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._@+-]{0,63}", args.by or ""):
+        raise Refusal(
+            "CONFIRM_BY_INVALID",
+            "The name after --by must be a plain identifier",
+            "Letters, digits, dot, underscore, @, + and dash, 1 to 64 characters: said, alice.b",
+            exit_code=2,
+        )
+    compilation = session.compilation(current["contracts"][0])
+    raising, lowering = set(args.id or []), set(args.refuse or [])
+    both = raising & lowering
+    if both:
+        raise Refusal(
+            "CONFIRM_CONTRADICTION",
+            "The same obligation is both confirmed and refused: " + ", ".join(sorted(both)),
+            "Name each obligation once",
+            exit_code=2,
+        )
+    # A later decision overrides an earlier one on the same obligation: what is raised now
+    # leaves the refused set, what is lowered now leaves the confirmed set. Only one call
+    # naming an obligation on both sides contradicts itself. Each decision keeps the name
+    # of who made it, so a later confirmation by someone else renames nothing.
+    # A compilation stored by an earlier version carries no decisions: read as none.
+    confirmed = {i: who for i, who in compilation.get("confirmed", {}).items() if i not in lowering}
+    confirmed.update(dict.fromkeys(raising, args.by))
+    refused = {i: who for i, who in compilation.get("refused", {}).items() if i not in raising}
+    refused.update(dict.fromkeys(lowering, args.by))
+    prompt_bytes = compilation["contract"]["instructions"].encode("utf-8")
+    try:
+        recompiled = prompts.compile_prompt(prompt_bytes, confirmed=confirmed, refused=refused)
+    except prompts.Confirmation as exc:
+        raise Refusal(
+            "CONFIRM_UNKNOWN",
+            "Unknown obligations: " + ", ".join(exc.unknown),
+            "Known obligations of this prompt: " + ", ".join(exc.known),
+            exit_code=2,
+            details={"known": exc.known},
+        ) from exc
+    except prompts.Conflict as exc:
+        raise Refusal(
+            "CONTRACT_CONFLICT",
+            f"Unit {exc.unit['n']} holds incompatible mechanical rules: {exc.detail}",
+            "Confirm only one of the limits",
+            details={"unit": exc.unit},
+        ) from exc
+    except prompts.TooLarge as exc:
+        # Every confirmed obligation repeats its unit in the contract: confirming many at
+        # once can exceed what one receipt carries, and that is a refusal, not a crash.
+        raise Refusal(
+            "PROMPT_TOO_LARGE", str(exc), "Confirm fewer obligations at once", exit_code=2
+        ) from exc
+    status, cancelled = open_case(root, session, recompiled, "a confirmation")
+    return 0, opened(status, cancelled, recompiled)
 
 
 def current_case(session):
@@ -713,6 +869,8 @@ def action_deliver(args):
                 "ref": c["contract_ref"],
                 "sha256": c["contract_sha256"],
                 "compiled_by": c["compiled_by"],
+                # Absent from a compilation stored by an earlier version: no decision then.
+                "confirmed_by": c.get("confirmed_by"),
                 "contract": c["contract"],
             }
             for role, c in compilations
@@ -793,7 +951,17 @@ def render(payload):
             ),
             f"Prompt : sha256 {token(payload['prompt_sha256'])[:16]}…. "
             f"Contrat : {token(payload['contracts'][0]['ref'])} (compilé par : "
-            f"{token(payload['contracts'][0]['compiled_by'])}).",
+            f"{token(payload['contracts'][0]['compiled_by'])}"
+            # Who decided, confirmations and refusals alike: naming them "confirmed by" would
+            # credit a refusal as a confirmation. Each row says which of the two it was.
+            + (
+                " ; décisions déclarées par : "
+                + ", ".join(token(name) for name in payload["contracts"][0]["confirmed_by"])
+                + ", identité déclarée au clavier, non vérifiée"
+                if payload["contracts"][0].get("confirmed_by")
+                else " ; aucune décision : les candidats sont affichés, jamais rejetés"
+            )
+            + ").",
             "",
             table(rows),
             "",
@@ -901,9 +1069,7 @@ def verify_payload(args, payload, public, answer):
     compilations = [
         (
             c["role"],
-            prompts.compile_prompt(
-                c["contract"]["instructions"].encode("utf-8"), compiled_by_of(c["contract"])
-            ),
+            recompile(c["contract"]),
         )
         for c in payload["contracts"]
     ]
@@ -1000,6 +1166,7 @@ def verify_payload(args, payload, public, answer):
                 "ref": compiled["contract_ref"],
                 "sha256": compiled["contract_sha256"],
                 "compiled_by": compiled["compiled_by"],
+                "confirmed_by": compiled["confirmed_by"],
             }
             for role, compiled in compilations
         ],
@@ -1014,6 +1181,21 @@ def verify_payload(args, payload, public, answer):
         if checks["same_code"]
         else " Attention : les vérificateurs qui relisent ce reçu n'ont pas le code de ceux "
         "qui l'ont écrit, donc les statuts ont été recalculés par un autre code."
+    )
+    # A contract this version cannot reproduce is not always a contract someone edited: a
+    # receipt written by another version was compiled by another compiler, which may read
+    # a wording this one does not, or the other way round. The verdict does not move --
+    # reproducing the contract from its own prompt is what makes a status trustworthy --
+    # but a reader is owed the cause and the remedy instead of a bare failure. The version
+    # is read from the signed origin, so a forged line changes this wording and nothing else.
+    stated_versions = sorted({stated_version(c["contract"]) for c in payload["contracts"]} - {None})
+    version_text = (
+        ""
+        if checks["contracts"] or not stated_versions or prompts.__version__ in stated_versions
+        else " Ce reçu a été écrit par skillflow-prompts "
+        + ", ".join(stated_versions)
+        + f" et relu par la version {prompts.__version__} : son contrat ne se recompile pas "
+        "à l'identique ici. Vérifie-le avec la version qui l'a écrit."
     )
     return (0 if ok else 1), {
         "ok": ok,
@@ -1034,16 +1216,52 @@ def verify_payload(args, payload, public, answer):
             if read_sha256
             else ""
         )
+        + version_text
         + code_text,
     }
 
 
+def origin_fields(contract):
+    """The fields a contract's origin line states about its own compilation.
+
+    `compiled_by` is required; the confirmations are present only when some were made.
+    Read from the signed contract, never from anything beside it.
+    """
+    fields = {}
+    for piece in contract["origin"].split(";"):
+        key, sep, value = piece.strip().partition(":")
+        if sep:
+            fields[key] = value
+    if "compiled_by" not in fields:
+        raise ValueError("origin without compiled_by")
+    return fields
+
+
 def compiled_by_of(contract):
     """Who compiled a contract, as its own origin line states it."""
-    for piece in contract["origin"].split(";"):
-        if piece.strip().startswith("compiled_by:"):
-            return piece.strip().split(":", 1)[1]
-    raise ValueError("origin without compiled_by")
+    return origin_fields(contract)["compiled_by"]
+
+
+def stated_version(contract):
+    """The version of this tool a contract's origin line claims wrote it, or None.
+
+    Claimed, never trusted: it explains a contract this version does not reproduce, and
+    decides nothing.
+    """
+    name, _, version = contract["origin"].split(";")[0].strip().partition(" ")
+    return version.strip() if name == "skillflow-prompts" and version.strip() else None
+
+
+def recompile(contract):
+    """The same compilation again, from the signed contract alone: prompt, compiler and
+    confirmations are all read from it, so a verification reproduces instead of trusting."""
+    fields = origin_fields(contract)
+    return prompts.compile_prompt(
+        contract["instructions"].encode("utf-8"),
+        fields["compiled_by"],
+        confirmed=prompts.decided(fields.get("confirmed", "")),
+        refused=prompts.decided(fields.get("refused", "")),
+    )
 
 
 def action_status(args):
@@ -1081,6 +1299,7 @@ def action_status(args):
 ACTIONS = {
     "init": action_init,
     "prompt": action_prompt,
+    "confirm": action_confirm,
     "answer": action_answer,
     "deliver": action_deliver,
     "verify": action_verify,
@@ -1096,6 +1315,10 @@ def parser():
         item.add_argument("--root", required=name != "verify")
         if name in ("prompt", "answer"):
             item.add_argument("--file", required=True)
+        if name == "confirm":
+            item.add_argument("--by", required=True)
+            item.add_argument("--id", action="append")
+            item.add_argument("--refuse", action="append")
         if name == "verify":
             item.add_argument("--receipt", required=True)
             item.add_argument("--answer", required=True)

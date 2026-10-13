@@ -27,6 +27,9 @@ LINES = "SkillFlow contrôle chaque consigne mesurable.\nElle reste brève.\nEt 
 # The one-minute trial CHATGPT.md asks for right after `init`, word for word.
 TRIAL_PROMPT = "Réponds en 12 mots maximum.\nMentionne « SkillFlow ».\n"
 TRIAL_ANSWER = "SkillFlow fonctionne.\n"
+# A prompt whose rules the compiler sets aside: "résumé" names a part of the answer.
+SCOPED_PROMPT = 'Rédige un résumé de ce texte.\nAu maximum 120 mots.\nMentionne "hypnose".\n'
+TOO_LONG = "bavarde " * 130
 
 
 def chatgpt(*args):
@@ -822,6 +825,307 @@ def test_the_one_minute_trial_of_chatgpt_md_runs_exactly_as_written(tmp_path):
     assert "non ancrée" in verified["summary"]
 
 
+def test_an_unconfirmed_candidate_is_shown_and_never_rejects(tmp_path):
+    """Said's rule: without a confirmation, an obligation is shown, never REJETE.
+
+    This is held by the contract, not by the rendering: a candidate has no obligation in
+    it, so there is nothing the authority could reject the answer on. An answer that
+    violates both candidates is accepted, delivered, and verified.
+    """
+    root = tmp_path / "travail"
+    prompt, answer = tmp_path / "prompt.txt", tmp_path / "answer.txt"
+    prompt.write_text(SCOPED_PROMPT, encoding="utf-8")
+    assert chatgpt("init", "--root", root)[0] == 0
+    code, compiled = chatgpt("prompt", "--root", root, "--file", prompt)
+    assert code == 0, compiled
+    rows = {r["id"]: r for r in compiled["units"]}
+    assert rows["u2-max-words"]["kind"] == "candidate"
+    assert rows["u2-max-words"]["demoted_by"] == "résumé"
+    assert rows["u3-contains-1"]["kind"] == "candidate"
+    assert "chatgpt confirm" in compiled["summary"]
+    assert compiled["confirmed"] == {} and compiled["confirmed_by"] is None
+
+    answer.write_text(TOO_LONG, encoding="utf-8")
+    code, accepted = chatgpt("answer", "--root", root, "--file", answer)
+    assert code == 0, accepted
+    assert accepted["counts"]["REJETE"] == 0 and accepted["counts"]["CANDIDAT"] == 2
+    shown = {row["id"]: row for row in accepted["rows"]}
+    assert shown["u2-max-words"]["status"] == "CANDIDAT"
+    assert "jamais rejeté" in shown["u2-max-words"]["detail"]
+    assert "chatgpt confirm --id u2-max-words" in shown["u2-max-words"]["detail"]
+    code, delivered = chatgpt("deliver", "--root", root)
+    assert code == 0, delivered
+    assert "| CANDIDAT |" in delivered["receipt"]
+    assert "aucune décision" in delivered["receipt"]
+    folder = Path(delivered["receipt_folder"])
+    code, verified = chatgpt(
+        "verify", "--receipt", folder / "receipt.json", "--answer", folder / "answer.txt"
+    )
+    assert code == 0 and verified["counts"]["CANDIDAT"] == 2, verified
+
+
+def test_a_later_decision_overrides_an_earlier_one_on_the_same_obligation(tmp_path):
+    """Confirm, then take it back: the obligation returns to a candidate, and the reverse.
+
+    Only one call naming an obligation on both sides contradicts itself. Decisions made in
+    separate calls are a history, and the latest one holds.
+    """
+    root = tmp_path / "travail"
+    prompt = tmp_path / "prompt.txt"
+    prompt.write_text(SCOPED_PROMPT, encoding="utf-8")
+    assert chatgpt("init", "--root", root)[0] == 0
+    assert chatgpt("prompt", "--root", root, "--file", prompt)[0] == 0
+    code, raised = chatgpt("confirm", "--root", root, "--by", "said", "--id", "u2-max-words")
+    assert code == 0, raised
+    assert {r["id"]: r["kind"] for r in raised["units"]}["u2-max-words"] == "mechanical"
+    code, lowered = chatgpt("confirm", "--root", root, "--by", "said", "--refuse", "u2-max-words")
+    assert code == 0, lowered
+    rows = {r["id"]: r for r in lowered["units"]}
+    assert rows["u2-max-words"]["kind"] == "candidate"
+    # Taken back by name: the refuser is named apart from the compiler's own reason, which
+    # stays on record.
+    assert rows["u2-max-words"]["refused_by"] == "said"
+    assert rows["u2-max-words"]["demoted_by"] == "résumé"
+    assert lowered["confirmed"] == {} and lowered["refused"] == {"u2-max-words": "said"}
+    code, again = chatgpt("confirm", "--root", root, "--by", "said", "--id", "u2-max-words")
+    assert code == 0, again
+    assert {r["id"]: r["kind"] for r in again["units"]}["u2-max-words"] == "mechanical"
+    assert again["confirmed"] == {"u2-max-words": "said"} and again["refused"] == {}
+    # Every reversal opened a new case and named the one it closed. The contract's identity
+    # comes from its content: the same decisions give the same contract, so raising it
+    # again yields the first contract, not a third one.
+    assert raised["cancelled_cases"] and lowered["cancelled_cases"] and again["cancelled_cases"]
+    assert raised["contract"] == again["contract"]
+    assert lowered["contract"] != raised["contract"]
+
+
+def test_restoring_a_check_someone_refused_names_who_restored_it(tmp_path):
+    """A check the compiler read, refused by Alice, restored by Bob: the receipt says Bob.
+
+    Restoring the compiler's reading is still an explicit decision, and it is not the
+    compiler's any more: without the name, the receipt would show a check nobody owns.
+    """
+    root = tmp_path / "travail"
+    prompt, answer = tmp_path / "prompt.txt", tmp_path / "answer.txt"
+    prompt.write_text(TRIAL_PROMPT, encoding="utf-8")
+    assert chatgpt("init", "--root", root)[0] == 0
+    code, compiled = chatgpt("prompt", "--root", root, "--file", prompt)
+    assert (
+        code == 0
+        and {r["id"]: r["kind"] for r in compiled["units"]}["u1-max-words"] == "mechanical"
+    )
+    code, refused = chatgpt("confirm", "--root", root, "--by", "alice", "--refuse", "u1-max-words")
+    assert code == 0, refused
+    rows = {r["id"]: r for r in refused["units"]}
+    assert (
+        rows["u1-max-words"]["kind"] == "candidate"
+        and rows["u1-max-words"]["refused_by"] == "alice"
+    )
+    code, restored = chatgpt("confirm", "--root", root, "--by", "bob", "--id", "u1-max-words")
+    assert code == 0, restored
+    rows = {r["id"]: r for r in restored["units"]}
+    assert rows["u1-max-words"]["kind"] == "mechanical"
+    assert rows["u1-max-words"]["confirmed_by"] == "bob"
+    assert restored["confirmed"] == {"u1-max-words": "bob"} and restored["refused"] == {}
+    answer.write_text(TRIAL_ANSWER, encoding="utf-8")
+    assert chatgpt("answer", "--root", root, "--file", answer)[0] == 0
+    code, delivered = chatgpt("deliver", "--root", root)
+    assert code == 0 and "confirmé par bob" in delivered["receipt"], delivered
+
+
+def test_each_obligation_keeps_the_name_of_who_confirmed_it(tmp_path):
+    """Alice confirms one obligation, Bob another: the receipt names each, not the last.
+
+    The author travels with the obligation in the signed origin, so a later confirmation by
+    someone else renames nothing, and the verification recomputes both names.
+    """
+    root = tmp_path / "travail"
+    prompt, answer = tmp_path / "prompt.txt", tmp_path / "answer.txt"
+    prompt.write_text(SCOPED_PROMPT, encoding="utf-8")
+    assert chatgpt("init", "--root", root)[0] == 0
+    assert chatgpt("prompt", "--root", root, "--file", prompt)[0] == 0
+    code, first = chatgpt("confirm", "--root", root, "--by", "alice", "--id", "u2-max-words")
+    assert code == 0, first
+    code, second = chatgpt("confirm", "--root", root, "--by", "bob", "--id", "u3-contains-1")
+    assert code == 0, second
+    rows = {r["id"]: r for r in second["units"]}
+    assert rows["u2-max-words"]["confirmed_by"] == "alice"
+    assert rows["u3-contains-1"]["confirmed_by"] == "bob"
+    assert second["confirmed"] == {"u2-max-words": "alice", "u3-contains-1": "bob"}
+    assert second["confirmed_by"] == ["alice", "bob"]
+
+    answer.write_text("Bref résumé qui mentionne hypnose.", encoding="utf-8")
+    assert chatgpt("answer", "--root", root, "--file", answer)[0] == 0
+    code, delivered = chatgpt("deliver", "--root", root)
+    assert code == 0, delivered
+    assert "décisions déclarées par : alice, bob" in delivered["receipt"]
+    assert "confirmé par alice" in delivered["receipt"]
+    assert "confirmé par bob" in delivered["receipt"]
+    folder = Path(delivered["receipt_folder"])
+    code, verified = chatgpt(
+        "verify", "--receipt", folder / "receipt.json", "--answer", folder / "answer.txt"
+    )
+    assert code == 0 and verified["checks"]["contracts"], verified
+    assert "confirmé par alice" in verified["receipt"] and "confirmé par bob" in verified["receipt"]
+
+
+def test_a_confirmation_raises_a_candidate_into_a_check_and_the_receipt_says_who(tmp_path):
+    """Confirmed by a named person, a candidate rejects; the receipt names that person.
+
+    A confirmation compiles a new contract: the old case is cancelled and named, the new
+    one admitted. It is refused once an answer was checked, and refused on a name the
+    prompt does not hold. The verification recomputes with the confirmations read from the
+    signed contract, so it agrees without trusting the receipt.
+    """
+    root = tmp_path / "travail"
+    prompt, answer = tmp_path / "prompt.txt", tmp_path / "answer.txt"
+    prompt.write_text(SCOPED_PROMPT, encoding="utf-8")
+    assert chatgpt("init", "--root", root)[0] == 0
+    code, compiled = chatgpt("prompt", "--root", root, "--file", prompt)
+    assert code == 0, compiled
+
+    code, unknown = chatgpt("confirm", "--root", root, "--by", "said", "--id", "u9-max-words")
+    assert code == 2 and unknown["error"]["code"] == "CONFIRM_UNKNOWN", unknown
+    assert "u2-max-words" in unknown["error"]["hint"]
+    # The name enters the signed origin line, split on ";": a free-form name would be cut
+    # there and the recompiled contract would differ. Only a plain identifier is accepted.
+    for name in ("Alice; Bob", "said et moi", "", "a" * 65, "x;confirmed:u3-contains-1"):
+        code, bad = chatgpt("confirm", "--root", root, "--by", name, "--id", "u2-max-words")
+        assert code == 2 and bad["error"]["code"] == "CONFIRM_BY_INVALID", (name, bad)
+    code, both = chatgpt(
+        "confirm",
+        "--root",
+        root,
+        "--by",
+        "said",
+        "--id",
+        "u2-max-words",
+        "--refuse",
+        "u2-max-words",
+    )
+    assert code == 2 and both["error"]["code"] == "CONFIRM_CONTRADICTION"
+
+    code, confirmed = chatgpt(
+        "confirm", "--root", root, "--by", "said", "--id", "u2-max-words", "--id", "u3-contains-1"
+    )
+    assert code == 0, confirmed
+    assert confirmed["cancelled_cases"] == [compiled["case_id"]]
+    assert confirmed["case_id"] != compiled["case_id"]
+    assert confirmed["contract"] != compiled["contract"]
+    rows = {r["id"]: r for r in confirmed["units"]}
+    assert rows["u2-max-words"]["kind"] == "mechanical"
+    assert rows["u2-max-words"]["confirmed_by"] == "said"
+    assert confirmed["confirmed"] == {"u2-max-words": "said", "u3-contains-1": "said"}
+    assert confirmed["confirmed_by"] == ["said"]
+
+    answer.write_text(TOO_LONG, encoding="utf-8")
+    code, rejected = chatgpt("answer", "--root", root, "--file", answer)
+    assert code == 1 and rejected["counts"]["REJETE"] == 2, rejected
+    # Too late to change the rules once an answer was checked against them.
+    code, late = chatgpt("confirm", "--root", root, "--by", "said", "--refuse", "u2-max-words")
+    assert code == 2 and late["error"]["code"] == "CONFIRM_AFTER_ANSWER", late
+
+    answer.write_text("Bref résumé qui mentionne hypnose.", encoding="utf-8")
+    code, accepted = chatgpt("answer", "--root", root, "--file", answer)
+    assert code == 0 and accepted["counts"]["VERIFIE"] == 2, accepted
+    code, delivered = chatgpt("deliver", "--root", root)
+    assert code == 0, delivered
+    assert "décisions déclarées par : said" in delivered["receipt"]
+    assert "confirmé par said" in delivered["receipt"]
+    folder = Path(delivered["receipt_folder"])
+    code, verified = chatgpt(
+        "verify", "--receipt", folder / "receipt.json", "--answer", folder / "answer.txt"
+    )
+    assert code == 0, verified
+    assert verified["checks"]["contracts"] and verified["checks"]["statuses"]
+    assert "décisions déclarées par : said" in verified["receipt"]
+    # The confirmations live in the signed contract: editing them there breaks the hash.
+    contract = json.loads((folder / "contract-prompt.json").read_bytes())
+    contract["origin"] = contract["origin"].replace("=said", "=gpt")
+    forged = tmp_path / "forged-contract.json"
+    forged.write_bytes(canonical(contract))
+    code, refused = chatgpt(
+        "verify", "--receipt", folder / "receipt.json", "--answer", folder / "answer.txt",
+        "--contract", forged,
+    )  # fmt: skip
+    assert code == 1 and refused["error"]["code"] == "CONTRACT_CHANGED"
+
+
+def test_more_candidates_than_one_receipt_can_carry_are_refused_before_a_case_opens(tmp_path):
+    """Every entry, candidate or check, repeats its unit in the rows a receipt shows.
+
+    Five hundred terms on one line would give a receipt no verification could read back:
+    the prompt is refused up front, with exit code 2, before any case opens. A confirmation
+    can then never push a case past that bound, since candidates were already counted. A
+    few dozen terms stay within it, and confirming them all at once works.
+    """
+    from skillflow_prompts import chatgpt as launcher
+
+    root = tmp_path / "travail"
+    prompt = tmp_path / "prompt.txt"
+    prompt.write_text("Summary:\n" + " ".join(f'Mention "t{i:05d}".' for i in range(500)) + "\n")
+    assert launcher.run(["init", "--root", str(root)])[0] == 0
+    code, refused = launcher.run(["prompt", "--root", str(root), "--file", str(prompt)])
+    assert code == 2, refused
+    assert refused["error"]["code"] == "PROMPT_TOO_LARGE"
+    code, status = launcher.run(["status", "--root", str(root)])
+    assert code == 0 and status["current"] is None
+
+    prompt.write_text("Summary:\n" + " ".join(f'Mention "t{i:02d}".' for i in range(40)) + "\n")
+    code, compiled = launcher.run(["prompt", "--root", str(root), "--file", str(prompt)])
+    assert code == 0, refused
+    candidates = [r["id"] for r in compiled["units"] if r["kind"] == "candidate"]
+    assert len(candidates) == 40
+    assert all(r["demoted_by"] == "Summary" for r in compiled["units"] if r["kind"] == "candidate")
+    argv = ["confirm", "--root", str(root), "--by", "said"]
+    for ident in candidates:
+        argv += ["--id", ident]
+    code, confirmed = launcher.run(argv)
+    assert code == 0, confirmed
+    assert sum(r["kind"] == "mechanical" for r in confirmed["units"]) == 40
+    assert confirmed["cancelled_cases"] == [compiled["case_id"]]
+
+
+def test_a_root_created_before_this_version_keeps_working(tmp_path):
+    """A compilation stored by an earlier version has no decision fields.
+
+    The same prompt gives the same contract, so the stored record is refreshed rather than
+    refused as a conflict, a confirmation reads the missing decisions as none, and the
+    delivery reads the missing author as none.
+    """
+    root = tmp_path / "travail"
+    prompt, answer = tmp_path / "prompt.txt", tmp_path / "answer.txt"
+    prompt.write_text(TRIAL_PROMPT, encoding="utf-8")
+    assert chatgpt("init", "--root", root)[0] == 0
+    code, compiled = chatgpt("prompt", "--root", root, "--file", prompt)
+    assert code == 0, compiled
+    stored = root / "compilations" / (compiled["contract"].split("@")[0] + ".json")
+    record = json.loads(stored.read_bytes())
+    for key in ("confirmed", "refused", "confirmed_by"):
+        del record[key]
+    stored.write_bytes(canonical(record))
+
+    code, again = chatgpt("prompt", "--root", root, "--file", prompt)
+    assert code == 0, again
+    assert again["contract"] == compiled["contract"]
+    assert "confirmed" in json.loads(stored.read_bytes())
+    # And with the old record in place, the decisions it lacks read as none.
+    stored.write_bytes(canonical(record))
+    code, refused = chatgpt("confirm", "--root", root, "--by", "said", "--refuse", "u1-max-words")
+    assert code == 0, refused
+    assert refused["refused"] == {"u1-max-words": "said"}
+    stored.write_bytes(canonical(record))
+    answer.write_text(TRIAL_ANSWER, encoding="utf-8")
+    assert chatgpt("answer", "--root", root, "--file", answer)[0] == 0
+    code, delivered = chatgpt("deliver", "--root", root)
+    assert code == 0, delivered
+    # Another contract under the same name is still a conflict, never silently replaced.
+    other = dict(record, contract_sha256="0" * 64)
+    stored.write_bytes(canonical(other))
+    code, conflict = chatgpt("prompt", "--root", root, "--file", prompt)
+    assert code == 3 and conflict["error"]["code"] == "STATE_CONFLICT", conflict
+
+
 def test_an_unreadable_file_of_mine_is_not_blamed_on_the_receipt(tmp_path):
     """The receipt is intact: the file that cannot be read is the reader's own.
 
@@ -919,6 +1223,71 @@ def test_a_receipt_written_by_other_verifier_code_says_so_in_its_summary(tmp_pat
     )
     assert code == 0 and honest["checks"]["same_code"] is True
     assert "vérificateurs" not in honest["summary"]
+
+
+def test_a_receipt_from_another_version_says_which_version_wrote_it(tmp_path, monkeypatch):
+    """A receipt written before an update must not read like an edited contract.
+
+    Reported by the reviewer on this very tree: this phase taught the compiler a wording it
+    did not read before ('Le mot "Paris" doit apparaître.'), so a contract compiled before
+    it no longer recompiles here. Reproducing the contract from its own prompt is what
+    makes a status trustworthy, so the verification still fails; it now names the version
+    that wrote the receipt and what to do, instead of blaming the contract. The verifier
+    code is unchanged in this scenario, so `same_code` says nothing about it.
+    """
+    from skillflow_prompts import chatgpt as launcher
+    from skillflow_prompts import prompts as compiler
+
+    root = tmp_path / "travail"
+    prompt, answer = tmp_path / "prompt.txt", tmp_path / "answer.txt"
+    prompt.write_text('Le mot "Paris" doit apparaître.\n', encoding="utf-8")
+    answer.write_text("Paris est la réponse attendue.\n", encoding="utf-8")
+    # The tool as it stood before this phase: the postposed wording is not read, and the
+    # version it stamps on the contract is its own.
+    monkeypatch.setattr(compiler, "CONTAINS", compiler.CONTAINS[:-1])
+    monkeypatch.setattr(compiler, "__version__", "0.0.0-avant")
+    for argv in (
+        ["init", "--root", root],
+        ["prompt", "--root", root, "--file", prompt],
+        ["answer", "--root", root, "--file", answer],
+        ["deliver", "--root", root],
+    ):
+        code, result = launcher.run([str(a) for a in argv])
+        assert code == 0, result
+    folder = Path(result["receipt_folder"])
+    # That version read no term in this prompt: its receipt holds no mechanical row.
+    written = json.loads(
+        base64.b64decode(json.loads((folder / "receipt.json").read_bytes())["payload"])
+    )
+    assert [row["id"] for row in written["units"]] == ["u1-sens"], written["units"]
+
+    monkeypatch.undo()
+    code, shown = launcher.run(
+        [
+            "verify",
+            "--receipt",
+            str(folder / "receipt.json"),
+            "--answer",
+            str(folder / "answer.txt"),
+        ]
+    )
+    assert code == 1 and shown["ok"] is False
+    assert shown["checks"]["contracts"] is False and shown["checks"]["same_code"] is True
+    assert "0.0.0-avant" in shown["summary"] and compiler.__version__ in shown["summary"]
+    assert "ne se recompile pas" in shown["summary"], shown["summary"]
+    # A receipt this version wrote and nobody touched carries no such notice.
+    _, honest = deliver_right_answer(tmp_path, tmp_path / "state")
+    code, verified = launcher.run(
+        [
+            "verify",
+            "--receipt",
+            str(honest / "receipt.json"),
+            "--answer",
+            str(honest / "answer.txt"),
+        ]
+    )
+    assert code == 0 and verified["ok"] is True
+    assert "recompile" not in verified["summary"], verified["summary"]
 
 
 def test_no_codepoint_decomposes_past_the_ceiling_the_launcher_reads_to():

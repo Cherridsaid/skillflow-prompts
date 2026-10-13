@@ -83,8 +83,31 @@ Trois conséquences :
 uv run --no-sync python -m skillflow_prompts chatgpt prompt --root <ROOT> --file prompt.txt
 ```
 
-La sortie liste les unités et les obligations. Rédige ensuite ta réponse dans un fichier,
-et fais-la contrôler.
+La sortie liste les unités et les obligations, en trois sortes :
+
+- `mechanical` : un contrôle que l'outil fera lui-même, limite de mots ou terme requis.
+- `candidate` : une limite ou un terme que l'outil a **reconnu puis mis de côté**, avec le
+  mot qui l'a mis de côté dans `demoted_by`. Par exemple « résumé » dans une ligne de
+  contexte fait passer tout ce qui suit en candidat. Un candidat est **affiché et jamais
+  rejeté** : il n'est pas dans le contrat, donc il ne peut pas faire échouer ta réponse.
+- `semantic` : une règle de sens, à respecter, que l'outil ne contrôle pas.
+
+**S'il y a des candidats, arrête-toi et montre-les moi.** C'est moi qui confirme, pas toi :
+une obligation confirmée devient un contrôle, et le reçu dira qui l'a confirmée. Attends ma
+réponse, puis lance ce que je te dicte, par exemple :
+
+```bash
+uv run --no-sync python -m skillflow_prompts chatgpt confirm --root <ROOT> --by said --id u2-max-words --id u3-contains-1
+```
+
+`--id` monte un candidat en contrôle, `--refuse` descend un contrôle en candidat, `--by`
+nomme la personne qui décide. Ce nom est **déclaré au clavier**, pas authentifié : le reçu
+l'affiche comme tel, et c'est moi qui sais si c'est bien moi qui l'ai tapé. La confirmation compile un **nouveau** contrat et rouvre le
+dossier ; elle est refusée dès qu'une réponse a été contrôlée (`CONFIRM_AFTER_ANSWER`),
+parce qu'on ne choisit pas ses règles en connaissant déjà la copie. Un identifiant inconnu
+est refusé avec la liste des identifiants connus (`CONFIRM_UNKNOWN`).
+
+Rédige ensuite ta réponse dans un fichier, et fais-la contrôler.
 
 ```bash
 uv run --no-sync python -m skillflow_prompts chatgpt answer --root <ROOT> --file answer.txt
@@ -97,6 +120,8 @@ Lis les statuts :
   mesurée et la limite.
 - `NON_VERIFIE` : aucun contrôle mécanique n'existe pour cette consigne. C'est à toi de la
   respecter, et l'outil ne prétend pas l'avoir vérifiée.
+- `CANDIDAT` : une limite ou un terme reconnu mais non confirmé. Affiché pour que je le
+  voie, jamais rejeté. Si je le confirme, il devient un contrôle au prochain dossier.
 
 **Corrige uniquement ce qui est `REJETE`.** Ne touche pas à ce qui passe déjà : la sortie
 liste ce qu'il ne faut pas casser. Réécris `answer.txt` et relance `answer`. Renvoyer la

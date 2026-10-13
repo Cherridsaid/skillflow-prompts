@@ -104,6 +104,20 @@ CONTAINS = [
         re.I,
     ),
     re.compile(rf"\b(?:mention|include|contain|cite)s?{GAP}{QUOTED}", re.I),
+    # The term may come first and the requirement after it: « Le mot "X" doit apparaître »,
+    # "The word "X" must appear". The naming word before the term is required, so the
+    # match never opens on the quotation itself, which the reading below takes for a
+    # quoted verb.
+    # The sentence must end right after the requirement: "doit apparaître 0 fois", "must
+    # appear twice" or "must appear: 0 times" say something else, and a colon or a comma
+    # only announces that something else. What they say is not read here.
+    re.compile(
+        r"\b(?:le|la|l['’]|the)\s+(?:mots?|termes?|expressions?|words?|terms?|strings?)\s+"
+        rf"{QUOTED}\s+(?:doit|doivent|devra|must|should|has\s+to|have\s+to)\s+"
+        r"(?:appara[iî]tre|figurer|être\s+présente?|appear|be\s+(?:present|included))"
+        r"\s*(?=[.!?]|$)",
+        re.I,
+    ),
 ]
 # A rule that holds under a condition or as one of several alternatives is not an
 # unconditional rule: it stays a rule of meaning.
@@ -170,6 +184,14 @@ class Conflict(Exception):
 
 class TooLarge(Exception):
     """The prompt has more units than one receipt can carry."""
+
+
+class Confirmation(Exception):
+    """A confirmation names an obligation this prompt does not hold."""
+
+    def __init__(self, unknown, known):
+        super().__init__("unknown obligations: " + ", ".join(sorted(unknown)))
+        self.unknown, self.known = sorted(unknown), sorted(known)
 
 
 def normalize(data):
@@ -294,19 +316,22 @@ def spanning(text):
 
 
 def carried(text):
-    """The line numbers of the lines that carry text instead of stating wording.
+    """The lines that carry text instead of stating wording, each with the mark that
+    carries it: {line number: mark}.
 
     A fenced block, a quotation marked with ">", a block indented by four spaces or by a
     tabulation, and a quotation that spans several lines all hold text the prompt
     transports. A fenced block left open closes at the end of the prompt, and a quotation
     marked with ">" runs on until a blank line, its unmarked continuation included: what a
-    mark opens is text until proven otherwise, which is the conservative reading.
+    mark opens is text until proven otherwise, which is the conservative reading. The mark
+    is kept because what a carried line would have stated is proposed under its name.
     """
-    blocked, mark, size, quoting = spanning(text), "", 0, False
+    blocked = dict.fromkeys(spanning(text), "guillemets")
+    mark, size, quoting = "", 0, False
     for number, raw in enumerate(text.split("\n"), 1):
         line = raw.strip()
         if mark:
-            blocked.add(number)
+            blocked[number] = mark * min(size, 3)
             # Only a fence of the same kind, at least as long, and carrying nothing else
             # closes the block: a shorter run inside it is part of the text.
             run = FENCE.match(line)
@@ -320,12 +345,13 @@ def carried(text):
         run = FENCE.match(line)
         if run:
             mark, size, quoting = run.group(1)[0], len(run.group(1)), False
-            blocked.add(number)
+            blocked[number] = mark * min(size, 3)
+        elif QUOTATION.match(raw):
+            blocked[number], quoting = ">", True
         elif CARRIED.match(raw):
-            blocked.add(number)
-            quoting = QUOTATION.match(raw) is not None
+            blocked[number], quoting = "indentation", False
         elif quoting:
-            blocked.add(number)
+            blocked[number] = ">"
     return blocked
 
 
@@ -347,20 +373,79 @@ def headings(found):
 
 
 def announces(text, underlined=False):
-    """True when a unit announces, for the units below it, a scope left uninterpreted.
+    """The word by which a unit announces, for the units below it, a scope left
+    uninterpreted; None when it announces nothing.
 
     Naming a part of the answer is enough, with or without punctuation or decoration. A
     condition and a denial announce a scope only as a heading -- marked by its colon, its
     hashes, its emphasis or an underline below it -- since written inside a sentence they
     already keep that sentence's own rules out. "Do not do the following:" denies what
-    comes after it, so nothing below it is an obligation this module may claim.
+    comes after it, so nothing below it is an obligation this module may claim. The word
+    is returned, not a flag: what is set aside under it is proposed with that word named.
     """
-    if PART.search(text):
-        return True
     bare = text.strip(DECORATION)
     marked = underlined or bare.endswith(":") or bool(HEADING.fullmatch(text.strip()))
     clean = mask(bare)
-    return marked and bool(ALTERNATIVE.search(clean) or NEGATION.search(clean))
+    if marked:
+        # In a heading, a denial wins over a part it also names ("Do not do the following
+        # in the title:"): what follows is forbidden, not scoped. A negation that belongs
+        # to a recognized limit ("pas plus de 3 mots par titre :") denies nothing. The
+        # wordings are merged and indexed once, and each negation is placed by bisection: a
+        # heading made of thirty thousand "pas plus de" must not cost their product.
+        wordings = []
+        for start, end in sorted(m.span() for p in MAX_WORDS for m in p.finditer(clean)):
+            if wordings and start <= wordings[-1][1]:
+                wordings[-1][1] = max(wordings[-1][1], end)
+            else:
+                wordings.append([start, end])
+        starts = [span[0] for span in wordings]
+        for found in NEGATION.finditer(clean):
+            index = bisect.bisect_right(starts, found.start()) - 1
+            if index < 0 or found.start() >= wordings[index][1]:
+                return found.group()
+    part = PART.search(text)
+    if part:
+        return part.group()
+    if not marked:
+        return None
+    found = ALTERNATIVE.search(clean)
+    return found.group() if found else None
+
+
+def nearest(positions, start, end):
+    """Among sorted positions lying outside the span, the closest before it, else the first
+    after it. Only called once `outside` said such a position exists."""
+    before = bisect.bisect_left(positions, start)
+    if before:
+        return positions[before - 1]
+    return positions[bisect.bisect_left(positions, end)]
+
+
+def shelve(rules, word):
+    """Rules set aside under `word`: proposed, named, and never applied unconfirmed."""
+    return [{"parameter": r["parameter"], "value": r["value"], "demoted_by": word} for r in rules]
+
+
+def decisions(mapping):
+    """Confirmations as the origin line carries them: `id=who`, comma separated, sorted.
+
+    Identifiers come from this module and names are plain identifiers checked by the
+    launcher, so neither holds "," "=" or ";": the line is read back without ambiguity.
+    """
+    return ",".join(f"{ident}={who}" for ident, who in sorted(mapping.items()))
+
+
+def decided(field):
+    """The mapping an origin field carries, the inverse of `decisions`."""
+    pairs = (piece.partition("=") for piece in field.split(",") if piece)
+    return {ident: who for ident, _, who in pairs}
+
+
+def propose(candidates, seen, parameter, value, word):
+    """Add a candidate once: the same wording set aside twice is one proposal."""
+    if ("candidate", parameter, value) not in seen:
+        seen.add(("candidate", parameter, value))
+        candidates.append({"parameter": parameter, "value": value, "demoted_by": word})
 
 
 def fragment(text, start):
@@ -377,30 +462,62 @@ def joins(gap):
 
 
 def detect(text):
-    """(mechanical rules, residual meaning) of one unit, from fixed explicit patterns only.
+    """(mechanical rules, residual meaning, candidates) of one unit, from fixed explicit
+    patterns only.
+
+    A candidate is a rule this module recognized and set aside -- under a scope, under a
+    denial, beside an alternative -- named with the word that set it aside. It is proposed,
+    never applied: only a confirmation turns it into a rule, and nothing is thrown away.
 
     Everything here is read once: a prompt is untrusted input, so no step may cost more
     than the length of the unit it reads.
     """
     plain = mask(text)
-    rules, spans, seen, approximate = [], [], set(), False
+    rules, candidates, spans, seen, approximate = [], [], [], set(), False
     covered = bytearray(len(text))
     # Where every clause starts and where every negation stands, both read once: a
     # negation reaches no further back than its own clause, and looking that up must not
-    # rescan the text for each limit found.
+    # rescan the text for each limit found. The words are kept: what they set aside is
+    # proposed under their name.
     bounds = [0, *(m.end() for m in CLAUSE.finditer(plain))]
-    negations = [m.start() for m in NEGATION.finditer(plain)]
+    denials = {m.start(): m.group() for m in NEGATION.finditer(plain)}
+    negations = sorted(denials)
     # Where this unit scopes a limit, read once: a part it names -- even quoted, since a
     # quotation hides a term and never a scope -- a condition, an approximation, a floor.
     # A word belonging to the recognized wording itself ("3 mots ou moins") says nothing
     # about the unit, so each limit is judged on the scopes that lie outside it.
-    scopes = sorted(
-        [m.start() for m in SCOPED.finditer(plain)] + [m.start() for m in PART.finditer(text)]
-    )
-    limits = []
+    scoping = {m.start(): m.group() for m in SCOPED.finditer(plain)}
+    scoping.update({m.start(): m.group() for m in PART.finditer(text)})
+    scopes = sorted(scoping)
+
+    def denied(start, end):
+        """True when the clause holding this wording also holds a denial of it.
+
+        A denial reaches no further back than its own clause, that clause closes after
+        the whole wording -- a boundary the wording contains ("Max.", "or fewer") is not
+        its end -- and a negation belonging to the wording ("pas plus de") denies nothing.
+        """
+        clause = bounds[bisect.bisect_right(bounds, start) - 1]
+        index = bisect.bisect_right(bounds, end)
+        closing = bounds[index] if index < len(bounds) else len(plain)
+        denial = bisect.bisect_left(negations, clause)
+        while denial < len(negations) and start <= negations[denial] < end:
+            denial += 1
+        return denial < len(negations) and negations[denial] < closing
+
+    limits, shelved = [], []
     for pattern in MAX_WORDS:
         for match in pattern.finditer(plain):
-            if not fragment(plain, match.start(1)) and not outside(scopes, *match.span()):
+            if fragment(plain, match.start(1)):
+                continue
+            if outside(scopes, *match.span()):
+                # A limit under a scope is not applied to the whole answer, and it is not
+                # thrown away either: it is proposed, with the word that scoped it -- unless
+                # its clause denies it, since a denial is the opposite instruction and a
+                # confirmation must never be able to invert the prompt.
+                word = scoping[nearest(scopes, *match.span())]
+                shelved.append((match.start(), match.end(), int(match.group(1)), word))
+            else:
                 limits.append((match.start(), match.end(), int(match.group(1))))
     # Overlapping wordings are one and the same limit ("max. 3 words maximum"), so they
     # are grouped before any denial is read: a denial of one is a denial of all.
@@ -419,13 +536,10 @@ def detect(text):
         # acceptable"). Only its own clause is read, that clause closes after the whole
         # wording -- a boundary the wording contains ("Max.", "or fewer") is not its end
         # -- and a negation belonging to the wording ("pas plus de") denies nothing.
-        clause = bounds[bisect.bisect_right(bounds, start) - 1]
-        index = bisect.bisect_right(bounds, end)
-        closing = bounds[index] if index < len(bounds) else len(plain)
-        denial = bisect.bisect_left(negations, clause)
-        while denial < len(negations) and start <= negations[denial] < end:
-            denial += 1
-        if denial < len(negations) and negations[denial] < closing:
+        if denied(start, end):
+            # Denied, so not a rule, and not a candidate either: what a denial sets aside
+            # is the opposite instruction, and confirming it as a limit would invert what
+            # the prompt says. It stays a rule of meaning.
             continue
         for value in values:
             # The same rule written twice ("au plus 40 mots maximum") is one rule.
@@ -434,33 +548,68 @@ def detect(text):
                 rules.append({"parameter": "max_words", "value": value})
         spans.append((start, end))
         covered[start:end] = b"\1" * (end - start)
+    # A limit set aside under a scope is proposed once the rules are known: the same limit
+    # also written as a rule ("At most 3 words or fewer", where "or" scopes one wording and
+    # not the other) is one limit, already checked, and not a candidate beside itself.
+    # A wording set aside may overlap another ("At most 3 words or fewer is not acceptable":
+    # "or" scopes the first wording and belongs to the second). Overlapping wordings are
+    # one limit, so a denial is read on their merged span, exactly as for the rules above;
+    # read on the wording alone, the "or" inside the other one would close the clause
+    # before the denial.
+    merged = []
+    for start, end in sorted([(s, e) for s, e, _ in limits] + [(s, e) for s, e, _, _ in shelved]):
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    starts = [group[0] for group in merged]
+    for start, _end, value, word in shelved:
+        # The group holding this wording is the last one that starts at or before it: a
+        # search by bisection, since a hostile prompt may hold tens of thousands of them.
+        whole = merged[bisect.bisect_right(starts, start) - 1]
+        if ("max_words", value) not in seen and not denied(*whole):
+            propose(candidates, seen, "max_words", value, word)
     # A term is asked for unconditionally or not at all, and here too what belongs to a
-    # recognized limit is not a condition about the unit.
-    gate = hide(plain, spans) if spans else plain
-    if not NEGATION.search(gate) and not ALTERNATIVE.search(gate):
-        for pattern in CONTAINS:
-            for match in pattern.finditer(text):
-                if covered[match.start()]:
-                    continue
-                ascii_quotes = match.group(1) is not None
-                term = match.group(1 if ascii_quotes else 2)
-                # A verb quoted in the unit ('Compare "include" and "exclude".') asks for
-                # nothing: what introduces a term must be the unit's own wording.
-                if plain[match.start()] == MASK:
-                    continue
-                if ("contains", term) not in seen:
-                    seen.add(("contains", term))
-                    rules.append({"parameter": "contains", "value": term})
-                spans.append(match.span())
-                covered[match.start() : match.end()] = b"\1" * (match.end() - match.start())
-                # Only how the term is introduced qualifies the check; the same words
-                # written inside the term are part of it. A term asked for as an exact
-                # string keeps a reserve when a quote convention was stripped from it.
-                asked = text[match.start() : match.start(1 if ascii_quotes else 2)]
-                raw = None if ascii_quotes else TYPOGRAPHIC.search(match.group())
-                approximate = approximate or bool(QUALIFIER.search(asked))
-                if raw is not None and raw.group(1) != term:
-                    approximate = approximate or bool(EXACT.search(asked))
+    # recognized limit is not a condition about the unit. Every wording read as a limit is
+    # hidden here, the ones set aside under a scope included: the "pas" of "pas plus de 3
+    # mots" and the "ou" of "3 mots ou moins" belong to that wording, and reading them as a
+    # denial or an alternative of the unit would lose the term beside them -- a limit under
+    # a scope must cost the term nothing.
+    gate = hide(plain, merged) if merged else plain
+    # A term beside a denial is the opposite of a requirement: never a rule, never a
+    # candidate, since confirming it would invert the prompt. A term beside an
+    # alternative is one of several the prompt allows: proposed under that word, so a
+    # reader can confirm the one that was meant.
+    denied = NEGATION.search(gate)
+    blocker = None if denied else ALTERNATIVE.search(gate)
+    for pattern in CONTAINS:
+        for match in pattern.finditer(text):
+            if covered[match.start()]:
+                continue
+            ascii_quotes = match.group(1) is not None
+            term = match.group(1 if ascii_quotes else 2)
+            # A verb quoted in the unit ('Compare "include" and "exclude".') asks for
+            # nothing: what introduces a term must be the unit's own wording.
+            if plain[match.start()] == MASK:
+                continue
+            if denied:
+                continue
+            if blocker:
+                propose(candidates, seen, "contains", term, blocker.group())
+                continue
+            if ("contains", term) not in seen:
+                seen.add(("contains", term))
+                rules.append({"parameter": "contains", "value": term})
+            spans.append(match.span())
+            covered[match.start() : match.end()] = b"\1" * (match.end() - match.start())
+            # Only how the term is introduced qualifies the check; the same words
+            # written inside the term are part of it. A term asked for as an exact
+            # string keeps a reserve when a quote convention was stripped from it.
+            asked = text[match.start() : match.start(1 if ascii_quotes else 2)]
+            raw = None if ascii_quotes else TYPOGRAPHIC.search(match.group())
+            approximate = approximate or bool(QUALIFIER.search(asked))
+            if raw is not None and raw.group(1) != term:
+                approximate = approximate or bool(EXACT.search(asked))
     merged = []
     for start, end in sorted(grow(text, start, end) for start, end in spans):
         if merged and (start <= merged[-1][1] or joins(text[merged[-1][1] : start])):
@@ -475,21 +624,35 @@ def detect(text):
     rest = "".join(rest)
     # What the unit still holds beyond punctuation is an obligation this module did not
     # recognize, and a check that only approximates what was asked leaves the rest
-    # unchecked: either way the unit stays under NON_VERIFIE instead of disappearing.
-    return rules, bool(INERT.sub("", rest)) or approximate or not rules
+    # unchecked: either way the unit stays under NON_VERIFIE instead of disappearing. A
+    # candidate covers nothing: unconfirmed, its wording is still unverified text.
+    return rules, bool(INERT.sub("", rest)) or approximate or not rules, candidates
 
 
-def compile_prompt(data, compiled_by="tool"):
+def compile_prompt(data, compiled_by="tool", confirmed=None, refused=None):
     """Normalized prompt -> compilation record holding the frozen SkillFlow contract.
 
     `compiled_by` names who classified the units: "tool" for this deterministic
     compilation, "model" when a model supplied the classification, "provided" for a
     contract handed over ready-made.
+
+    The compiler proposes every mechanical rule it recognizes, the ones it sets aside
+    included, each named with the word that set it aside. A confirmation raises a
+    candidate into a rule or lowers a rule into a candidate: `confirmed` and `refused` map
+    each obligation to the name of who decided, so the receipt can say who confirmed each
+    one, not who confirmed last. Unconfirmed, a candidate is shown and never checked, so it
+    can never reject an answer. The confirmations enter the contract's origin, which is
+    signed: a verification recompiles with the same ones and trusts none of them.
     """
     normalized = normalize(data)
     text = normalized.decode("utf-8")
     digest = sha256(normalized)
-    compiled, obligations = [], []
+    confirmed, refused = dict(confirmed or {}), dict(refused or {})
+    if set(confirmed) & set(refused):
+        # The launcher never produces this; an origin line that does is not a contract
+        # this tool wrote, and a verification must not pick a side for it.
+        raise ValueError("an obligation is both confirmed and refused")
+    compiled, obligations, known = [], [], set()
     found = units(text)
     if len(found) > MAX_UNITS:
         raise TooLarge(f"{len(found)} units, at most {MAX_UNITS}")
@@ -497,43 +660,83 @@ def compile_prompt(data, compiled_by="tool"):
     # the contract much larger than the prompt. That expansion is counted as it grows and
     # refused before anything is serialized, let alone signed.
     expansion = 2 * len(text)
-    announced, underlined, quoted = False, headings(found), carried(text)
+    announced, banned, underlined, quoted = None, False, headings(found), carried(text)
     for index, unit in enumerate(found):
-        rules, meaning = detect(unit["text"])
+        rules, meaning, candidates = detect(unit["text"])
         # A line held inside a fenced block, a quotation or an indented block is text the
         # prompt carries, not wording it states: it asks for nothing of its own and
-        # announces no scope.
-        if unit["line"] in quoted:
+        # announces no scope. Its rules are proposed under the mark that carries it.
+        # Three readings can set a line aside, in one fixed order. A denial announced as a
+        # heading ("Do not do the following:") wins over everything: what follows is
+        # forbidden, carried or not, so nothing is proposed, the line's own candidates
+        # included, since confirming any of it would invert the prompt. Then a carried
+        # line proposes all it would have stated under its mark. Then a scope announced
+        # above proposes the limits under the announcing word instead of applying them to
+        # the whole answer.
+        if banned and (rules or candidates):
+            rules, candidates, meaning = [], [], True
+        elif unit["line"] in quoted:
+            candidates = shelve(rules + candidates, quoted[unit["line"]])
             rules, meaning = [], True
-        # A scope announced above is not interpreted here: under it, a limit stays a rule
-        # of meaning instead of being applied to the whole answer.
-        if announced and rules:
+        elif announced and (rules or candidates):
+            candidates = shelve(rules, announced) + candidates
             rules, meaning = [], True
         # Once a prompt addresses a part of the answer, or opens a condition as a heading,
         # nothing takes that back: no later line restores a whole-answer scope, whatever
         # its punctuation, its decoration, or the rules it carries of its own.
-        announced = announced or (
-            unit["line"] not in quoted and announces(unit["text"], index in underlined)
-        )
-        expansion += len(rules) * len(unit["text"])
-        if expansion > MAX_EXPANSION:
-            raise TooLarge(f"{expansion} characters of contract, at most {MAX_EXPANSION}")
-        limits = {r["value"] for r in rules if r["parameter"] == "max_words"}
-        if len(limits) > 1:
-            raise Conflict(unit, "max_words " + " vs ".join(str(v) for v in sorted(limits)))
-        entries, terms = [], 0
-        for rule in rules:
-            terms += rule["parameter"] == "contains"
-            name = "max-words" if rule["parameter"] == "max_words" else f"contains-{terms}"
+        # Every heading is read, whatever was announced before it: the first scope word is
+        # kept as the scope, and a heading that denies bans everything below it even when a
+        # scope was already open above ("For the title only:" then "Do not do the
+        # following:"). Neither is ever taken back.
+        if unit["line"] not in quoted:
+            word = announces(unit["text"], index in underlined)
+            if word and NEGATION.fullmatch(word):
+                banned = True
+            if announced is None:
+                announced = word
+        # Identifiers come from the prompt alone, rules first, so that confirming one never
+        # renames another: a confirmation moves an entry between classes and nothing else.
+        entries, numbered = [], {}
+        for rule in rules + candidates:
+            parameter = rule["parameter"]
+            numbered[parameter] = numbered.get(parameter, 0) + 1
+            if parameter == "max_words":
+                name = (
+                    "max-words" if numbered[parameter] == 1 else f"max-words-{numbered[parameter]}"
+                )
+            else:
+                name = f"contains-{numbered[parameter]}"
             entry = {
                 "id": f"u{unit['n']}-{name}",
-                "class": "mechanical",
+                "class": "candidate" if "demoted_by" in rule else "mechanical",
                 "source": "detected",
-                "parameter": rule["parameter"],
+                "parameter": parameter,
                 "value": rule["value"],
             }
+            if "demoted_by" in rule:
+                entry["demoted_by"] = rule["demoted_by"]
+            known.add(entry["id"])
+            # An explicit decision always carries its author, whether it changes what the
+            # compiler read or restores it: a check Alice refused and Bob restored is a check
+            # confirmed by Bob, and the receipt must say so.
+            if entry["id"] in confirmed:
+                entry["class"], entry["confirmed_by"] = "mechanical", confirmed[entry["id"]]
+            elif entry["id"] in refused:
+                # `demoted_by` names a word of the prompt; a person who refused is named
+                # apart, so the two are never mistaken for one another.
+                entry["class"], entry["refused_by"] = "candidate", refused[entry["id"]]
             entries.append(entry)
-            value = rule["value"] if rule["parameter"] == "max_words" else [rule["value"]]
+        mechanical = [e for e in entries if e["class"] == "mechanical"]
+        # Every entry, candidate included, repeats its unit in the rows the receipt shows:
+        # all of them are counted, so a receipt that could not be carried is refused here.
+        expansion += len(entries) * len(unit["text"])
+        if expansion > MAX_EXPANSION:
+            raise TooLarge(f"{expansion} characters of contract, at most {MAX_EXPANSION}")
+        limits = {e["value"] for e in mechanical if e["parameter"] == "max_words"}
+        if len(limits) > 1:
+            raise Conflict(unit, "max_words " + " vs ".join(str(v) for v in sorted(limits)))
+        for entry in mechanical:
+            value = entry["value"] if entry["parameter"] == "max_words" else [entry["value"]]
             obligations.append(
                 {
                     "id": entry["id"],
@@ -543,12 +746,15 @@ def compile_prompt(data, compiled_by="tool"):
                     "coverage": "complete",
                     "verifier": "text",
                     "role": "controller",
-                    "parameters": {rule["parameter"]: value},
+                    "parameters": {entry["parameter"]: value},
                 }
             )
         if meaning:
             entries.append({"id": f"u{unit['n']}-sens", "class": "semantic", "source": "default"})
         compiled.append(unit | {"obligations": entries})
+    unknown = (set(confirmed) | set(refused)) - known
+    if unknown:
+        raise Confirmation(unknown, known)
     if not obligations:
         # An answer must still pass through a checked step: this technical obligation only
         # says the answer is not empty, and the receipt never counts it as a rule.
@@ -567,8 +773,15 @@ def compile_prompt(data, compiled_by="tool"):
     contract = {
         "schema_version": "1",
         "version": CONTRACT_VERSION,
+        # The confirmations are part of what makes this contract this contract: they are
+        # read back from here by a verification, never from anything unsigned.
         "origin": f"skillflow-prompts {__version__}; compiled_by:{compiled_by}; "
-        f"prompt_sha256:{digest}",
+        + (
+            f"confirmed:{decisions(confirmed)}; refused:{decisions(refused)}; "
+            if confirmed or refused
+            else ""
+        )
+        + f"prompt_sha256:{digest}",
         "instructions": text,
         "resources": [
             {"id": "prompt", "version": CONTRACT_VERSION, "sha256": digest, "content": text}
@@ -593,6 +806,9 @@ def compile_prompt(data, compiled_by="tool"):
         "format": "skillflow-prompts-compilation-v1",
         "prompt_sha256": digest,
         "compiled_by": compiled_by,
+        "confirmed": dict(sorted(confirmed.items())),
+        "refused": dict(sorted(refused.items())),
+        "confirmed_by": sorted({*confirmed.values(), *refused.values()}) or None,
         "units": compiled,
         "contract": contract,
         "contract_ref": contract["id"] + "@" + CONTRACT_VERSION,
