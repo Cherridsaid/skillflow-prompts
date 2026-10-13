@@ -29,10 +29,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 FOLDER = ROOT / "docs" / "images"
 ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
-# `openai/gpt-image-2` was asked for and does not exist in the OpenRouter catalogue, which
-# lists `openai/gpt-5-image`, `openai/gpt-5-image-mini` and `openai/gpt-5.4-image-2`. The
-# mini model is the cheapest of that family and decoration asks nothing more of it.
-MODEL = "openai/gpt-5-image-mini"
+# The model the owner named, "GPT 2.0", is `openai/gpt-5.4-image-2` in the catalogue, shown
+# there as "OpenAI: GPT-5.4 Image 2". An earlier brief wrote it as `openai/gpt-image-2`,
+# which exists nowhere, and this script then fell back to the cheapest of the family on the
+# argument that decoration asks nothing more. That argument was not ours to make: what is
+# paid for is what was asked for, and the price difference is written down in PROMPTS.md.
+MODEL = "openai/gpt-5.4-image-2"
 PALETTE = "muted sage green, warm grey and a single terracotta accent on an off-white ground"
 NO_TEXT = "absolutely no text, no letters, no numbers, no symbols, no logo, no user interface"
 

@@ -1,5 +1,7 @@
-* text=auto eol=lf
-LICENSE -text
-*.png -text
-*.whl -text
-*.gz -text
+# The decorative images stay in the repository and out of the archive.
+#
+# `git archive` builds the zip people attach to a conversation. Four megabytes of
+# decoration in it would be paid by every person who uploads it, for pictures that carry no
+# information. On GitHub the images show normally; in the zip the README links simply find
+# no file.
+docs/images/ export-ignore

@@ -60,6 +60,8 @@ tout, de l'installation au reçu. Deux faits de cet essai, datés et non promis 
 « Essayé le 13 octobre 2026 » n'est pas « fonctionne partout ». Les deux plateformes
 changent sans nous, et rien ici n'est une promesse de compatibilité.
 
+![Décoratif seulement : du vélin plissé. Ne montre aucune sortie de l'outil.](docs/images/vellum-pleats.png)
+
 ## Ce qui est contrôlé, et ce qui ne l'est pas
 
 | Statut | Sens |
@@ -104,6 +106,8 @@ activés, et le fichier le plus profond créé par une installation se trouve un
 caractères sous le dossier choisi : au-delà d'environ 150 caractères,
 `uv sync --locked` tronque l'installation **en silence**. L'outil refuse désormais de
 tourner dans cet état, sous `INSTALL_INCOMPLETE`, au lieu de planter plus tard.
+
+![Décoratif seulement : une pierre sur une feuille quadrillée. Ne montre aucune sortie de l'outil.](docs/images/stone-grid.png)
 
 ## La démo
 

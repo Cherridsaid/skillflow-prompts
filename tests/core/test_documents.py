@@ -216,11 +216,16 @@ def test_no_image_is_undocumented_or_passed_off_as_an_output():
     assert images, "no image: this test would pass by having nothing to check"
     for name in images:
         assert f"`{name}`" in paper, name
-    # The model asked for does not exist, and the substitution is stated rather than hidden.
-    assert "openai/gpt-image-2" in paper and "does not exist" in paper
+    # The model that was asked for is the one that was paid for, and the mistake that led
+    # to a cheaper one is written down rather than quietly fixed.
+    assert "openai/gpt-5.4-image-2" in paper
+    assert "openai/gpt-image-2" in paper and "exists in no catalogue" in paper
     assert "openai/gpt-5-image-mini" in paper
     # The cost is written down, because someone paid it.
     assert "Cost (USD)" in paper and "Total spent" in paper
+    # The archive people upload carries no decoration: the exclusion is part of the deal.
+    attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+    assert "docs/images/ export-ignore" in attributes
     # Wherever an image is used, the alt text disclaims it. Checked on every document.
     import re
 

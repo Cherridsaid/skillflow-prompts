@@ -59,6 +59,8 @@ receipt. Two facts from that run, dated and not promised:
 "Tried on 13 October 2026" is not "works everywhere". Both platforms change under us, and
 nothing here is a compatibility promise.
 
+![Decorative only: folded vellum. It shows no output of the tool.](docs/images/vellum-pleats.png)
+
 ## What is checked, and what is not
 
 | Status | Meaning |
@@ -101,6 +103,8 @@ resolves at most 260 characters per path unless long paths are enabled, and the 
 file an install creates sits about a hundred characters below the folder you choose: past
 roughly 150 characters, `uv sync --locked` truncates the install in silence. The tool now
 refuses to run in that state, under `INSTALL_INCOMPLETE`, instead of crashing later.
+
+![Decorative only: a stone on a ruled sheet. It shows no output of the tool.](docs/images/stone-grid.png)
 
 ## The demo
 
