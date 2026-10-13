@@ -71,10 +71,17 @@ EXACT = re.compile(r"\b(?:chaînes?|chaines?|strings?|caractères?|characters?)\
 # No pattern matches this and none can cross it: it stands for a quoted term while the
 # unit's own wording is read.
 MASK = "\x00"
+# A count is about words, and a hyphen glueing another word to "mots" makes a different
+# noun: "mots-clés" are keywords, "mots-croisés" a crossword. Nothing is read there, on
+# either side of the count. Measured before this: "Donne au moins 2 mots-clés de 5 mots
+# maximum." invented a floor of two words out of the keywords and, worse, applied the limit
+# of five -- five words per keyword -- to the whole answer, rejecting what the prompt asks
+# for. The hyphens listed are the ones the verifier itself separates two words on.
+COMPOUND = r"(?![-‐‑–—]\w)"
 MAX_WORDS = [
     re.compile(
         rf"\b(?:au\s+maximum|au\s+plus|maximum|max\.?|pas\s+plus\s+de)\s+(?:de\s+)?"
-        rf"{NUMBER}\s+mots\b",
+        rf"{NUMBER}\s+mots\b{COMPOUND}",
         re.I,
     ),
     re.compile(
@@ -83,12 +90,29 @@ MAX_WORDS = [
     ),
     re.compile(
         rf"\b(?:at\s+most|no\s+more\s+than|maximum(?:\s+of)?|max\.?|up\s+to)\s+{NUMBER}"
-        rf"\s+words\b",
+        rf"\s+words\b{COMPOUND}",
         re.I,
     ),
     re.compile(
         rf"\b{NUMBER}\s+words\s+(?:at\s+most\b|maximum\b|max\b\.?|or\s+(?:fewer|less)\b)", re.I
     ),
+]
+# A floor is the other half of a word count, and it was read as nothing until now. It goes
+# through the same readings as a limit: hidden from what follows, set aside by a denial,
+# proposed under a scope. "pas moins de" carries its own "pas", which denies nothing, just
+# as "pas plus de" does.
+MIN_WORDS = [
+    re.compile(
+        rf"\b(?:au\s+moins|minimum\s+de|pas\s+moins\s+de)\s+{NUMBER}\s+mots\b{COMPOUND}",
+        re.I,
+    ),
+    re.compile(rf"\b{NUMBER}\s+mots\s+(?:au\s+minimum\b|minimum\b|au\s+moins\b|ou\s+plus\b)", re.I),
+    re.compile(
+        rf"\b(?:at\s+least|a\s+minimum\s+of|minimum\s+of|no\s+fewer\s+than|no\s+less\s+than)"
+        rf"\s+{NUMBER}\s+words\b{COMPOUND}",
+        re.I,
+    ),
+    re.compile(rf"\b{NUMBER}\s+words\s+(?:at\s+least\b|minimum\b|or\s+more\b)", re.I),
 ]
 # Between the verb and the quoted term, only articles and the words "word", "term",
 # "expression" may appear. Any other word ("exactly three times") is a rule of its own
@@ -200,6 +224,10 @@ CONDITIONAL = (
 # A limit that applies to a part of the answer, under a condition or approximately is
 # not an explicit whole-answer rule.
 SCOPED = re.compile(
+    # A floor word scopes a limit: "au moins deux exemples de 5 mots maximum" asks for five
+    # words per example, and read as a limit on the whole answer the check would reject a
+    # ten-word answer the prompt allows. The word is dropped where it belongs to a
+    # recognized count wording, so "entre 20 mots minimum et 40 mots maximum" carries both.
     rf"\b(?:{PART_WORDS}|chaque|each|par|per|{CONDITIONAL}|environ|about|around|"
     r"approximately|approximativement|minimum|least|au\s+moins)\b",
     re.I,
@@ -572,70 +600,101 @@ def detect(text):
             denial += 1
         return denial < len(negations) and negations[denial] < closing
 
-    limits, shelved = [], []
-    for pattern in MAX_WORDS:
-        for match in pattern.finditer(plain):
-            if fragment(plain, match.start(1)):
-                continue
-            if outside(scopes, *match.span()):
-                # A limit under a scope is not applied to the whole answer, and it is not
-                # thrown away either: it is proposed, with the word that scoped it -- unless
-                # its clause denies it, since a denial is the opposite instruction and a
-                # confirmation must never be able to invert the prompt.
-                word = scoping[nearest(scopes, *match.span())]
-                shelved.append((match.start(), match.end(), int(match.group(1)), word))
-            else:
-                limits.append((match.start(), match.end(), int(match.group(1))))
-    # Overlapping wordings are one and the same limit ("max. 3 words maximum"), so they
-    # are grouped before any denial is read: a denial of one is a denial of all.
-    groups = []
-    for start, end, value in sorted(limits):
-        if groups and start <= groups[-1][1]:
-            # Grown in place: rebuilding the list of values would copy it for every
-            # overlapping wording, and a prompt may hold tens of thousands of them.
-            groups[-1][1] = max(groups[-1][1], end)
-            groups[-1][2].append(value)
-        else:
-            groups.append([start, end, [value]])
-    for start, end, values in groups:
-        # A limit the prompt denies is not a limit, whether the denial comes before it
-        # ("do not use at most 3 words") or after it ("at most 3 words is not
-        # acceptable"). Only its own clause is read, that clause closes after the whole
-        # wording -- a boundary the wording contains ("Max.", "or fewer") is not its end
-        # -- and a negation belonging to the wording ("pas plus de") denies nothing.
-        if denied(start, end):
-            # Denied, so not a rule, and not a candidate either: what a denial sets aside
-            # is the opposite instruction, and confirming it as a limit would invert what
-            # the prompt says. It stays a rule of meaning.
-            continue
-        for value in values:
-            # The same rule written twice ("au plus 40 mots maximum") is one rule.
-            if ("max_words", value) not in seen:
-                seen.add(("max_words", value))
-                rules.append({"parameter": "max_words", "value": value})
-        spans.append((start, end))
-        covered[start:end] = b"\1" * (end - start)
-    # A limit set aside under a scope is proposed once the rules are known: the same limit
-    # also written as a rule ("At most 3 words or fewer", where "or" scopes one wording and
-    # not the other) is one limit, already checked, and not a candidate beside itself.
-    # A wording set aside may overlap another ("At most 3 words or fewer is not acceptable":
-    # "or" scopes the first wording and belongs to the second). Overlapping wordings are
-    # one limit, so a denial is read on their merged span, exactly as for the rules above;
-    # read on the wording alone, the "or" inside the other one would close the clause
-    # before the denial.
+    # Every wording of a word count is collected before any one of them is judged: a floor
+    # wording and a limit wording overlap ("At most 3 words or more", where "or more" ends
+    # a floor and "At most 3 words" a limit), and a denial is read on everything the
+    # wordings that overlap cover.
+    found = []
+    for parameter, patterns in (("max_words", MAX_WORDS), ("min_words", MIN_WORDS)):
+        for pattern in patterns:
+            for match in pattern.finditer(plain):
+                if fragment(plain, match.start(1)):
+                    continue
+                found.append((match.start(), match.end(), int(match.group(1)), parameter))
+    # Overlapping wordings are one and the same count ("max. 3 words maximum", "At most 3
+    # words or more"), whichever family each belongs to, so they are all merged before any
+    # denial is read: a denial of one is a denial of all. Read on a wording alone, the "or"
+    # held inside the wording overlapping it would close the clause before the denial, and
+    # a count the prompt refuses would come back as a candidate -- one command away from a
+    # check the prompt forbids.
     merged = []
-    for start, end in sorted([(s, e) for s, e, _ in limits] + [(s, e) for s, e, _, _ in shelved]):
+    for start, end, _value, _parameter in sorted(found):
         if merged and start <= merged[-1][1]:
             merged[-1][1] = max(merged[-1][1], end)
         else:
             merged.append([start, end])
     starts = [group[0] for group in merged]
-    for start, _end, value, word in shelved:
-        # The group holding this wording is the last one that starts at or before it: a
-        # search by bisection, since a hostile prompt may hold tens of thousands of them.
-        whole = merged[bisect.bisect_right(starts, start) - 1]
-        if ("max_words", value) not in seen and not denied(*whole):
-            propose(candidates, seen, "max_words", value, word)
+
+    def covering(start):
+        """The merged span of every count wording overlapping the one starting here.
+
+        The last group starting at or before it, found by bisection: a hostile prompt may
+        hold tens of thousands of wordings.
+        """
+        return merged[bisect.bisect_right(starts, start) - 1]
+
+    # A word held inside a recognized count wording says nothing about the unit: the "moins"
+    # of "au moins 40 mots" is that floor itself, not a condition on the limit beside it,
+    # and the "ou" of "3 mots ou moins" opens no alternative. The same word counting
+    # something else does scope: "au moins deux exemples de 5 mots maximum" asks for five
+    # words per example, so the limit is proposed and never applied to the whole answer.
+    def counted(position):
+        """True when this position lies inside a recognized count wording."""
+        group = bisect.bisect_right(starts, position) - 1
+        return group >= 0 and position < merged[group][1]
+
+    scopes = [position for position in scopes if not counted(position)]
+    limits, shelved, floors, lowered = [], [], [], []
+    for start, end, value, parameter in found:
+        held, set_aside = (limits, shelved) if parameter == "max_words" else (floors, lowered)
+        if outside(scopes, start, end):
+            # A count under a scope is not applied to the whole answer, and it is not
+            # thrown away either: it is proposed, with the word that scoped it, unless a
+            # denial reaches it -- a denial is the opposite instruction, and a confirmation
+            # must never be able to invert the prompt.
+            set_aside.append((start, end, value, scoping[nearest(scopes, start, end)]))
+        else:
+            held.append((start, end, value))
+    for parameter, held in (("max_words", limits), ("min_words", floors)):
+        groups = []
+        for start, end, value in sorted(held):
+            # A wording another count already covers says nothing of its own: the "moins"
+            # of "3 mots ou moins" belongs to that limit.
+            if covered[start]:
+                continue
+            if groups and start <= groups[-1][1]:
+                # Grown in place: rebuilding the list of values would copy it for every
+                # overlapping wording, and a prompt may hold tens of thousands of them.
+                groups[-1][1] = max(groups[-1][1], end)
+                groups[-1][2].append(value)
+            else:
+                groups.append([start, end, [value]])
+        for start, end, values in groups:
+            # A count the prompt denies is not a count, whether the denial comes before it
+            # ("do not use at most 3 words") or after it ("at most 3 words is not
+            # acceptable"). A denial reaches no further back than its own clause, that
+            # clause closes after the whole wording -- a boundary a wording contains
+            # ("Max.", "or fewer") is not its end -- and a negation belonging to the
+            # wording ("pas plus de", "pas moins de") denies nothing.
+            if denied(*covering(start)):
+                # Denied, so not a rule, and not a candidate either: what a denial sets
+                # aside is the opposite instruction, and confirming it as a count would
+                # invert what the prompt says. It stays a rule of meaning.
+                continue
+            for value in values:
+                # The same rule written twice ("au plus 40 mots maximum") is one rule.
+                if (parameter, value) not in seen:
+                    seen.add((parameter, value))
+                    rules.append({"parameter": parameter, "value": value})
+            spans.append((start, end))
+            covered[start:end] = b"\1" * (end - start)
+    # A count set aside under a scope is proposed once the rules are known: the same count
+    # also written as a rule ("At most 3 words or fewer", where "or" scopes one wording and
+    # not the other) is one count, already checked, and not a candidate beside itself.
+    for parameter, set_aside in (("max_words", shelved), ("min_words", lowered)):
+        for start, _end, value, word in set_aside:
+            if (parameter, value) not in seen and not denied(*covering(start)):
+                propose(candidates, seen, parameter, value, word)
     # A term is asked for unconditionally or not at all, and here too what belongs to a
     # recognized limit is not a condition about the unit. Every wording read as a limit is
     # hidden here, the ones set aside under a scope included: the "pas" of "pas plus de 3
@@ -646,6 +705,9 @@ def detect(text):
     # hidden from the readings below exactly as a limit's is: the "pas" of "ne mentionne
     # pas « Paris »" belongs to that ban, so it must not be read as a denial of the unit,
     # and the term it forbids must not be read again as a term the unit asks for.
+    # A floor is hidden from what follows for the same reason as a limit: the "moins" of
+    # "au moins 40 mots" belongs to the floor and opens no alternative, the "pas" of "pas
+    # moins de 40 mots" denies nothing.
     bans = []
     for pattern in FORBIDDEN:
         for match in pattern.finditer(text):
@@ -880,8 +942,15 @@ def compile_prompt(data, compiled_by="tool", confirmed=None, refused=None):
         limits = {e["value"] for e in mechanical if e["parameter"] == "max_words"}
         if len(limits) > 1:
             raise Conflict(unit, "max_words " + " vs ".join(str(v) for v in sorted(limits)))
+        floors = {e["value"] for e in mechanical if e["parameter"] == "min_words"}
+        if len(floors) > 1:
+            raise Conflict(unit, "min_words " + " vs ".join(str(v) for v in sorted(floors)))
+        # A floor above a limit asks for an answer that cannot exist. Refused here, before
+        # anything is signed, exactly as two limits that contradict each other are.
+        if floors and limits and min(floors) > min(limits):
+            raise Conflict(unit, f"min_words {min(floors)} vs max_words {min(limits)}")
         for entry in mechanical:
-            scalar = entry["parameter"] in ("max_words", "ends_with_question")
+            scalar = entry["parameter"] in ("max_words", "min_words", "ends_with_question")
             value = entry["value"] if scalar else [entry["value"]]
             obligations.append(
                 {

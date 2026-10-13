@@ -384,6 +384,8 @@ def evaluate(compilations, answer):
 def describe(entry):
     if entry["parameter"] == "max_words":
         return f"au plus {entry['value']} mots"
+    if entry["parameter"] == "min_words":
+        return f"au moins {entry['value']} mots"
     if entry["parameter"] == "ends_with_question":
         return "finit par une question"
     if entry["parameter"] == "not_contains":
@@ -402,6 +404,22 @@ def verdict(entry, result):
             "status": "REJETE",
             "detail": f"{result['words']} mots pour {entry['value']} au plus : "
             f"retire au moins {result['words'] - entry['value']} mots",
+        }
+    if entry["parameter"] == "min_words":
+        # The count shown is the one that decided, and it is not the one a limit uses: a
+        # floor counts generously, so the same answer can read 21 words under a limit and
+        # 33 under a floor. Saying which counted is what keeps that from looking like a bug.
+        if result["passed"]:
+            return {
+                "status": "VERIFIE",
+                "detail": f"{result['generous_words']} mots, plancher {entry['value']} "
+                "(comptage large : apostrophe et trait d'union séparent deux mots)",
+            }
+        return {
+            "status": "REJETE",
+            "detail": f"{result['generous_words']} mots pour {entry['value']} au moins : "
+            f"ajoute au moins {entry['value'] - result['generous_words']} mots "
+            "(comptage large : apostrophe et trait d'union séparent deux mots)",
         }
     if entry["parameter"] == "ends_with_question":
         if result["passed"]:

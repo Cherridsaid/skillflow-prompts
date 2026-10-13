@@ -175,6 +175,7 @@ class Contract(Strict):
                         "not_contains",
                         "min_length",
                         "max_words",
+                        "min_words",
                         "ends_with_question",
                     },
                     "json": {"schema"},
@@ -196,6 +197,8 @@ class Contract(Strict):
                         or p.get("min_length", 1) < 1
                         or type(p.get("max_words", 1)) is not int
                         or p.get("max_words", 1) < 1
+                        or type(p.get("min_words", 1)) is not int
+                        or p.get("min_words", 1) < 1
                         or type(p.get("ends_with_question", True)) is not bool
                     ):
                         raise ValueError("invalid text verifier parameters")

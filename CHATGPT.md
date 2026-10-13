@@ -132,10 +132,22 @@ Rédige ensuite ta réponse dans un fichier, et fais-la contrôler.
 uv run --no-sync python -m skillflow_prompts chatgpt answer --root <ROOT> --file answer.txt
 ```
 
-Quatre choses sont contrôlées mécaniquement, et rien d'autre : une **limite de mots**, un
-**terme requis**, un **terme interdit** quand je l'écris sous la forme « ne mentionne pas
-« X » » avec le terme entre guillemets, et une **réponse qui finit par une question** quand
-j'écris « termine par une question ».
+Cinq choses sont contrôlées mécaniquement, et rien d'autre : une **limite de mots**, un
+**plancher de mots** quand j'écris « au moins N mots », un **terme requis**, un **terme
+interdit** quand je l'écris sous la forme « ne mentionne pas « X » » avec le terme entre
+guillemets, et une **réponse qui finit par une question** quand j'écris « termine par une
+question ».
+
+Une limite et un plancher ne comptent pas les mots de la même façon, et c'est voulu. Sous
+une limite, « l'eau » et « porte-monnaie » comptent pour un mot ; sous un plancher, ils
+comptent pour deux. Mesuré sur une phrase française : 21 mots d'un côté, 33 de l'autre.
+Chaque verdict nomme le comptage qui a décidé, donc la même réponse peut lire 21 sous une
+limite et 33 sous un plancher sans que ce soit un défaut. La règle derrière : un contrôle
+peut être plus faible que la consigne, jamais plus fort.
+
+Un plancher qui compte autre chose que des mots met la limite voisine en `CANDIDAT` : « au
+moins deux exemples de 5 mots maximum » demande cinq mots par exemple, pas cinq mots en
+tout, et l'outil ne contrôle pas une limite qu'il lirait plus strictement que moi.
 
 Un terme interdit est cherché comme **mot entier**, jamais à l'intérieur d'un mot plus
 long : interdire « roue » n'interdit pas « brouette ». Éviter le mot n'évite pas l'idée non
@@ -159,7 +171,9 @@ Lis les statuts :
 **Corrige uniquement ce qui est `REJETE`.** Ne touche pas à ce qui passe déjà : la sortie
 liste ce qu'il ne faut pas casser. Réécris `answer.txt` et relance `answer`. Renvoyer la
 **même** réponse ne consomme aucun tour. Le budget est de trois tours par étape ; après
-`BUDGET_EXHAUSTED`, arrête-toi et dis-le moi, ne remets rien.
+`BUDGET_EXHAUSTED`, arrête-toi et dis-le moi, ne remets rien. Recoller le même prompt pour
+repartir d'un dossier neuf ne rouvre rien : le budget est attaché au prompt, pas à la
+conversation, et un dossier rouvert avec le même texte revient épuisé.
 
 Quand tous les contrôles mécaniques passent, remets :
 

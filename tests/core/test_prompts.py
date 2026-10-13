@@ -47,9 +47,9 @@ def test_units_are_the_numbered_non_empty_lines():
         ("Use 3 words or less.", [("max_words", 3)], False),
         ("Réponds en 40 mots ou moins.", [("max_words", 40)], False),
         ("Réponds en 40 mots ou  moins.", [("max_words", 40)], False),
-        # A floor is not a limit, in either language.
-        ("Réponds en au moins 40 mots.", [], True),
-        ("Write at least 40 words.", [], True),
+        # A floor is not a limit: it is a floor, and it is checked as one since P7.
+        ("Réponds en au moins 40 mots.", [("min_words", 40)], False),
+        ("Write at least 40 words.", [("min_words", 40)], False),
         # A word quoted in the unit is part of the term asked for, and qualifies nothing.
         (
             "Réponds en 3 mots maximum. Mentionne « minimum ».",
@@ -119,7 +119,7 @@ def test_units_are_the_numbered_non_empty_lines():
         ("Chapitre de 100 mots maximum.", [], True),
         ("Légende de 5 mots maximum.", [], True),
         ("Si possible, 30 mots maximum.", [], True),
-        ("At least 100 words.", [], True),
+        ("At least 100 words.", [("min_words", 100)], False),
         # A number taken from inside a longer numeral is not a limit.
         ("Answer in 1,200 words maximum.", [], True),
         ("Réponds en 1 200 mots maximum.", [], True),
@@ -543,12 +543,15 @@ def test_what_a_denial_an_alternative_or_a_carried_line_sets_aside_is_proposed_u
     rules, _, candidates = detect("Mentionne « Paris » ou mentionne « Lyon ».")
     assert rules == []
     assert [(c["value"], c["demoted_by"]) for c in candidates] == [("Paris", "ou"), ("Lyon", "ou")]
-    # Two wordings of one limit, one of them scoped by its own "or": one rule, no candidate
-    # beside it, since the candidate would only repeat a check that already exists.
+    # Two wordings of one limit: one rule, no candidate beside it, since the candidate
+    # would only repeat a check that already exists.
     rules, meaning, candidates = detect("At most 3 words or fewer.")
     assert rules == [{"parameter": "max_words", "value": 3}] and candidates == []
-    # The second wording is not covered by the rule's span, so a residue stays: conservative.
-    assert meaning
+    # No residue: the "or" belongs to the wording overlapping the first one, so the whole
+    # unit is that limit and nothing in it says more. It used to leave one, because that
+    # "or" scoped the first wording away and only the second was covered -- a reserve on a
+    # unit that holds nothing but its limit, exactly as "Use 3 words or fewer." does not.
+    assert not meaning
     # A limit scoped to a part of the answer, inside its own unit, is proposed under it.
     rules, _, candidates = detect("Titre : 3 mots maximum.")
     assert rules == [] and candidates == [
@@ -902,6 +905,172 @@ def test_ending_on_a_question_is_checked_and_never_more_strictly_than_asked():
     assert proposals(scoped) == [
         ("u2-ends-with-question-1", "candidate", "ends_with_question", True, "titre")
     ]
+
+
+def test_a_floor_on_the_number_of_words_is_checked_like_a_limit():
+    """A floor is as measurable as a ceiling, and it was read as nothing until now.
+
+    "Réponds en au moins 40 mots" is the other half of a word count, frequent in a real
+    prompt, and it goes through the same machinery as the limit: a denial sets it aside, a
+    scope or a condition proposes it, a number taken from inside a longer numeral is not a
+    floor, and the same floor written twice is one rule.
+    """
+    for text, value in (
+        ("Réponds en au moins 40 mots.", 40),
+        ("Écris 40 mots minimum.", 40),
+        ("Pas moins de 25 mots.", 25),
+        ("Write at least 40 words.", 40),
+        ("Use a minimum of 12 words.", 12),
+        ("Write 30 words or more.", 30),
+    ):
+        rules, _meaning, candidates = detect(text)
+        assert rules == [{"parameter": "min_words", "value": value}], text
+        assert candidates == [], text
+    # A floor and a limit live together and are both checked.
+    rules, _meaning, _candidates = detect("Entre 20 mots minimum et 40 mots maximum.")
+    assert {"parameter": "min_words", "value": 20} in rules
+    assert {"parameter": "max_words", "value": 40} in rules
+    # The same readings as a limit: denied, set aside; scoped or conditional, proposed.
+    assert detect("N'écris pas au moins 40 mots.") == ([], True, [])
+    # The word named is the closest one that set it aside, "peux" here and not "Si".
+    rules, _meaning, candidates = detect("Si tu le peux, écris au moins 40 mots.")
+    assert rules == []
+    assert candidates == [{"parameter": "min_words", "value": 40, "demoted_by": "peux"}]
+    rules, _meaning, candidates = detect("Titre de 8 mots minimum.")
+    assert rules == [] and candidates == [
+        {"parameter": "min_words", "value": 8, "demoted_by": "Titre"}
+    ]
+    # A number taken from inside a longer numeral is not a floor, exactly as for a limit.
+    assert detect("Write at least 1,200 words.") == ([], True, [])
+    # A floor above a limit in the same unit cannot both be met: refused before any
+    # contract exists, like two incompatible limits.
+    with pytest.raises(Conflict):
+        compile_prompt(b"Au moins 40 mots et au plus 20 mots.")
+
+
+def test_a_floor_counting_something_other_than_words_still_scopes_the_limit_beside_it():
+    """A floor of items is not a floor of words, and it scopes the limit it introduces.
+
+    Raised by the reviewer: "Donne au moins deux exemples de 5 mots maximum." asks for two
+    examples of five words each, so a ten-word answer honours it. Read as a limit on the
+    whole answer, the check rejects what the prompt allows -- stronger than the
+    instruction, which nothing here is allowed to be. The floor words scope a limit again,
+    as they did before a floor was read at all, and the exception is narrow: a word held
+    inside a recognized count wording says nothing about the unit.
+    """
+    for text, value in (
+        ("Donne au moins deux exemples de 5 mots maximum.", 5),
+        ("Give at least two examples of 5 words maximum.", 5),
+        ("Au moins 3 arguments, 20 mots maximum.", 20),
+        ("Cite au minimum 2 sources en 10 mots maximum.", 10),
+    ):
+        rules, _meaning, candidates = detect(text)
+        assert rules == [], text
+        assert [(c["parameter"], c["value"]) for c in candidates] == [("max_words", value)], text
+    # A hyphen makes another noun, and "mots-clés" is not "mots": no count is read there,
+    # so the floor of keywords keeps scoping the limit beside it. Raised by the reviewer,
+    # measured on both sides of the count: the floor of two words was invented out of "au
+    # moins 2 mots-clés", and the limit of five words -- five words per keyword -- was
+    # applied to the whole answer, which rejects what the prompt asks for.
+    for text in (
+        "Donne au moins 2 mots-clés de 5 mots maximum.",
+        "Donne au moins 2 mots-clefs de 5 mots maximum.",
+    ):
+        rules, _meaning, candidates = detect(text)
+        assert rules == [], text
+        assert [(c["parameter"], c["value"]) for c in candidates] == [("max_words", 5)], text
+    # Nothing at all is read where the noun is not "mots": no floor, no limit, no candidate.
+    assert detect("Au moins 3 mots-croisés.") == ([], True, [])
+    assert detect("Réponds en au moins 40 mots-clés.") == ([], True, [])
+    assert detect("Write at least 40 words-per-line.") == ([], True, [])
+    # A floor of items scoping a floor of words: a floor per example is not a floor on the
+    # answer either.
+    rules, _meaning, candidates = detect("Donne au moins 2 exemples de au moins 5 mots.")
+    assert rules == []
+    assert [(c["parameter"], c["value"]) for c in candidates] == [("min_words", 5)]
+    # The narrow exception: the floor word belongs to the floor wording, so it scopes
+    # nothing, and a unit holding both a floor and a limit still carries both.
+    rules, _meaning, candidates = detect("Entre 20 mots minimum et 40 mots maximum.")
+    assert rules == [
+        {"parameter": "max_words", "value": 40},
+        {"parameter": "min_words", "value": 20},
+    ]
+    assert candidates == []
+    assert detect("Réponds en au moins 40 mots.")[0] == [{"parameter": "min_words", "value": 40}]
+    assert detect("Write at least 40 words.")[0] == [{"parameter": "min_words", "value": 40}]
+
+
+def test_overlapping_wordings_are_one_quantifier_whatever_family_each_belongs_to():
+    """A denial written past a wording's own end still reaches it, and no quantifier is
+    proposed beside itself.
+
+    Raised by the reviewer on "At least 3 words or more is not acceptable.": the "or"
+    closes the clause, so the denial behind it was never read, and the floor the prompt
+    refuses came back as a candidate -- confirmable, so one command away from a check the
+    prompt forbids. Measured on the limit too, where it predates the floor: "At most 3
+    words or more is not acceptable." proposed a limit of three words, because the wording
+    that overlaps it ("3 words or more") belongs to the other family and the merged span
+    held limits only.
+
+    So every recognized wording of a word count is merged before any denial is read, floors
+    and limits together: overlapping wordings are one and the same quantifier, and a denial
+    of one is a denial of all.
+    """
+    for text in (
+        "At least 3 words or more is not acceptable.",
+        "Au moins 3 mots ou plus n'est pas acceptable.",
+        "At most 3 words or more is not acceptable.",
+        "Au plus 3 mots ou plus n'est pas acceptable.",
+    ):
+        assert detect(text) == ([], True, []), text
+    # The same two wordings without the denial: one floor, and no candidate repeating a
+    # check that already exists.
+    rules, _meaning, candidates = detect("Au moins 3 mots ou plus.")
+    assert rules == [{"parameter": "min_words", "value": 3}] and candidates == []
+    # A denial that governs something else leaves the count alone: merging reads further
+    # than a wording's own end, never further than the wordings it overlaps.
+    rules, _meaning, candidates = detect(
+        "Réponds en 20 mots au plus et ne mentionne pas « Paris »."
+    )
+    assert rules == [
+        {"parameter": "max_words", "value": 20},
+        {"parameter": "not_contains", "value": "Paris"},
+    ]
+    assert candidates == []
+    rules, _meaning, _candidates = detect("Écris au moins 40 mots, sans emoji.")
+    assert {"parameter": "min_words", "value": 40} in rules
+
+
+def test_a_floor_counts_words_generously_and_a_limit_counts_them_prudently():
+    """The same asymmetry as a ban, on the other side of the count.
+
+    Under-counting is harmless for a ceiling -- it lets a longer answer through, which is
+    weaker -- and wrong for a floor, where it rejects an answer a reader finds long enough.
+    In French an elision is two words to a reader and one to `words`: measured on a
+    sentence of that kind, 21 against 33, a third of the text. So a floor counts on the
+    generous side, where an apostrophe or a hyphen separates two words, and a limit keeps
+    the prudent count. Raised by the reviewer before a line of this was written.
+    """
+    from skillflow_prompts.verifiers import pieces
+
+    french = (
+        "L'eau qu'il a bue aujourd'hui venait d'un porte-monnaie d'argent, jusqu'à ce "
+        "qu'on l'ouvre et qu'il n'y ait plus d'eau du tout."
+    )
+    assert words(french) == 21
+    assert pieces(french) == 33
+    # A floor of 30 is met for a reader and would be refused by the prudent count.
+    floor = {"verifier": "text", "parameters": {"min_words": 30}}
+    assert check(floor, {"message": french.encode()})["passed"]
+    # The limit keeps the prudent count, which is the weak side for a ceiling.
+    ceiling = {"verifier": "text", "parameters": {"max_words": 25}}
+    assert check(ceiling, {"message": french.encode()})["passed"]
+    # Both countings agree when nothing is elided or compounded.
+    plain = "un deux trois quatre cinq"
+    assert words(plain) == pieces(plain) == 5
+    assert not check(
+        {"verifier": "text", "parameters": {"min_words": 6}}, {"message": plain.encode()}
+    )["passed"]
 
 
 def test_too_many_units_are_refused_before_any_contract_exists():

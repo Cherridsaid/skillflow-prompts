@@ -15,13 +15,38 @@ code that recomputed a status is the code that wrote it.
 | `contains` | each term appears in the answer, as a substring, case-sensitive | that the term is used, or used correctly |
 | `not_contains` | no forbidden term appears as a whole word | that the idea is absent: only the word is |
 | `min_length` | the answer holds at least that many characters | that the characters mean anything |
-| `max_words` | the answer holds at most that many words | that the words are the right ones |
+| `max_words` | the answer holds at most that many words, counted prudently | that the words are the right ones |
+| `min_words` | the answer holds at least that many words, counted generously | that the words say anything |
 | `ends_with_question` | the answer ends on a question mark | that the question is open, or worth asking |
 
-A prompt compiled by this tool only ever produces `max_words`, `contains`, `not_contains`
-and `ends_with_question`: a limit on the number of words, a term asked for explicitly, a
-term forbidden explicitly, and an answer asked to end on a question. Nothing else in a
-prompt becomes a mechanical check.
+A prompt compiled by this tool only ever produces `max_words`, `min_words`, `contains`,
+`not_contains` and `ends_with_question`: a limit and a floor on the number of words, a term
+asked for explicitly, a term forbidden explicitly, and an answer asked to end on a
+question. Nothing else in a prompt becomes a mechanical check.
+
+### Two countings, one rule
+
+A floor and a limit do not count words the same way, and that is deliberate. `words`
+counts "l'eau", "qu'il", "aujourd'hui" and "porte-monnaie" as one word each; a reader
+counts two. Measured on a French sentence of that kind: 21 against 33, a third of the text.
+
+Under-counting lets a longer answer through a **limit**, which is weaker than the
+instruction and harmless. It refuses an answer long enough for a **floor**, which is
+stronger than the instruction and forbidden here. So a floor counts generously, where an
+apostrophe or a hyphen separates two words, and a limit keeps the prudent count. Each
+verdict says which count decided, so the same answer reading 21 words under a limit and 33
+under a floor does not look like a defect.
+
+A floor above a limit in the same line asks for an answer that cannot exist: the
+compilation is refused before anything is signed, like two limits that contradict each
+other.
+
+A floor that counts something other than words scopes the count beside it: "au moins deux
+exemples de 5 mots maximum" asks for five words per example, so the limit is proposed and
+never applied to the whole answer. Read as a limit on the answer, it would reject a
+ten-word answer the prompt allows. The exception is narrow, and it is what makes "entre 20
+mots minimum et 40 mots maximum" carry both: a word held inside a recognized count wording
+is that count, not a condition on the one beside it.
 
 ### Ending on a question
 

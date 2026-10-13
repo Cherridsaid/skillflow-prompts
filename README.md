@@ -21,8 +21,8 @@ the failing lines only, and signs a receipt that recomputes instead of being bel
 ## The loop, in a conversation
 
 1. You paste a prompt. The tool reads what is **mechanically checkable** in it: a limit on
-   the number of words, a term that must appear, a term that must not, an answer asked
-   to end on a question.
+   the number of words and a floor under it, a term that must appear, a term that must
+   not, an answer asked to end on a question.
 2. Each obligation is shown with its status. What the tool recognized but set aside, under
    a scope or a condition, is shown as a **candidate** and never rejects anything until you
    confirm it by name.

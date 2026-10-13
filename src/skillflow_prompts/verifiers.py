@@ -37,6 +37,26 @@ def words(text):
     return count
 
 
+# An apostrophe or a hyphen joins two words for this file and separates them for a reader.
+SEPARATORS = {"'", "’", "-", "‐", "‑", "–", "—"}
+
+
+def pieces(text):
+    """Number of words counted generously: an apostrophe or a hyphen separates two words.
+
+    `words` counts "l'eau", "qu'il", "aujourd'hui" and "porte-monnaie" as one word each; a
+    reader counts two. Measured on a French sentence of that kind: 21 against 33, a third
+    of the text.
+
+    Which count to use follows from the rule this project holds everywhere: a check may be
+    weaker than the instruction and never stronger. Under-counting lets a longer answer
+    through a **ceiling**, which is weaker, and refuses an answer long enough for a
+    **floor**, which is stronger. So a floor counts here, generously, and a ceiling keeps
+    the prudent `words`.
+    """
+    return words("".join(" " if char in SEPARATORS else char for char in text))
+
+
 def letter(char):
     """True when this character belongs to a word: a letter or a digit, as `words` reads them."""
     return bool(char) and unicodedata.category(char)[0] in "LN"
@@ -106,6 +126,11 @@ def check(obligation, inputs):
         if "max_words" in params:
             counted = words(text)
             result.update(words=counted, passed=result["passed"] and counted <= params["max_words"])
+        if "min_words" in params:
+            generous = pieces(text)
+            result.update(
+                generous_words=generous, passed=result["passed"] and generous >= params["min_words"]
+            )
         if params.get("ends_with_question"):
             ending = asks(text)
             result.update(ends_with_question=ending, passed=result["passed"] and ending)
