@@ -202,6 +202,40 @@ def test_the_cold_run_is_stated_as_a_dated_fact(name):
         assert fact in text, fact
 
 
+def test_no_image_is_undocumented_or_passed_off_as_an_output():
+    """An image cannot be held to a test the way a sentence can, so it carries nothing.
+
+    What is testable about an image is its paperwork and how it is introduced: every file
+    is named in PROMPTS.md with the prompt that made it and what it cost, and every place
+    it appears says, in the alt text a screen reader reads aloud, that it shows no output
+    of the tool. A reader who sees something that looks like a result reads it as a result.
+    """
+    folder = ROOT / "docs" / "images"
+    paper = read("docs/images/PROMPTS.md")
+    images = sorted(p.name for p in folder.glob("*.png"))
+    assert images, "no image: this test would pass by having nothing to check"
+    for name in images:
+        assert f"`{name}`" in paper, name
+    # The model asked for does not exist, and the substitution is stated rather than hidden.
+    assert "openai/gpt-image-2" in paper and "does not exist" in paper
+    assert "openai/gpt-5-image-mini" in paper
+    # The cost is written down, because someone paid it.
+    assert "Cost (USD)" in paper and "Total spent" in paper
+    # Wherever an image is used, the alt text disclaims it. Checked on every document.
+    import re
+
+    for path in MARKDOWN:
+        for alt, target in re.findall(
+            r"!\[([^\]]*)\]\(([^)]+)\)", path.read_text(encoding="utf-8")
+        ):
+            if target.startswith(("http://", "https://")):
+                continue
+            assert "images/" in target, f"{path.name}: image outside docs/images: {target}"
+            lowered = alt.lower()
+            assert "decorative" in lowered or "décoratif" in lowered, f"{path.name}: {alt}"
+            assert "no output" in lowered or "aucune sortie" in lowered, f"{path.name}: {alt}"
+
+
 def script(name):
     """A script of this repository, loaded by path: `scripts` is not a package."""
     import importlib.util

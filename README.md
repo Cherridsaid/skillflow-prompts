@@ -2,6 +2,8 @@
 
 [Français](README.fr.md)
 
+![Decorative only: paper sheets and a metal rule. It shows no output of the tool.](docs/images/paper-rule.png)
+
 **A prompt becomes a contract, the answer is checked against it, and what fails is named
 line by line.** No native integration, no server, no extension: the tool runs inside an
 ordinary conversation, in the sandbox the assistant already has, and hands back a receipt

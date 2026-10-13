@@ -2,6 +2,8 @@
 
 [English](README.md)
 
+![Décoratif seulement : des feuilles de papier et une règle métallique. Ne montre aucune sortie de l'outil.](docs/images/paper-rule.png)
+
 **Un prompt devient un contrat, la réponse est contrôlée contre lui, et ce qui échoue est
 nommé ligne par ligne.** Aucune intégration native, aucun serveur, aucune extension :
 l'outil tourne dans une conversation ordinaire, dans le bac à sable que l'assistant a déjà,
