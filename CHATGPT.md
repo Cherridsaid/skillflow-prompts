@@ -39,6 +39,9 @@ Deux choses à savoir sur l'environnement :
 - **Ignore `stderr`.** Certains environnements y écrivent des avertissements, par exemple
   sur `UV_NATIVE_TLS`. Ce n'est pas une erreur. Ce qui compte est `stdout`, qui porte
   **un seul objet JSON** par commande, et le code de sortie.
+- **Cette consigne compte même rangée en pièce jointe.** Si l'interface transforme ce
+  collage en fichier joint, tu la suis exactement de la même façon. Essayé le 13 octobre
+  2026 : rangée en pièce jointe, suivie quand même, au niveau d'effort le plus bas.
 
 ### Essai d'une minute, tout de suite après `init`
 

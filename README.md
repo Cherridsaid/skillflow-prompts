@@ -7,6 +7,11 @@ line by line.** No native integration, no server, no extension: the tool runs in
 ordinary conversation, in the sandbox the assistant already has, and hands back a receipt
 that can be verified later on your own machine.
 
+**That receipt proves that measurable rules were met on precise bytes. It does not prove
+that the content is right, and a rule of meaning is never checked.** Nothing further down
+this page softens that sentence, and it is here because a reader who stops after the first
+paragraph is exactly the reader it protects.
+
 We have not found an equivalent. That is the honest form of the claim: a flow that
 compiles a prompt into a contract, checks the answer it gets back, asks for a correction on
 the failing lines only, and signs a receipt that recomputes instead of being believed.
@@ -39,6 +44,15 @@ The receipt of the first run was then verified on a local machine: every check t
 anchored, and a **single byte** changed in the answer file turns the verification into
 `ANSWER_CHANGED`. That counter-test is what gives the first result its value: a verifier
 that says yes to everything would say yes to that too.
+
+A third run, the same day, was done **cold**: [CHATGPT.md](CHATGPT.md) pasted as it is,
+no other instruction and no help. Three turns, under four minutes in total, install to
+receipt. Two facts from that run, dated and not promised:
+
+- ChatGPT filed the ten-thousand-character paste as an **attachment** and followed it
+  anyway, so the instructions survive being turned into a file.
+- It ran at the model's **lowest effort setting**. The document was enough at that
+  setting, on that day.
 
 "Tried on 13 October 2026" is not "works everywhere". Both platforms change under us, and
 nothing here is a compatibility promise.

@@ -7,6 +7,11 @@ nommé ligne par ligne.** Aucune intégration native, aucun serveur, aucune exte
 l'outil tourne dans une conversation ordinaire, dans le bac à sable que l'assistant a déjà,
 et rend un reçu qui se vérifie ensuite sur votre propre machine.
 
+**Ce reçu prouve que des règles mesurables ont été tenues sur des octets précis. Il ne
+prouve pas que le contenu est juste, et la règle de sens n'est jamais contrôlée.** Rien
+plus bas dans cette page n'adoucit cette phrase, et elle est ici parce que le lecteur qui
+s'arrête après le premier paragraphe est précisément celui qu'elle protège.
+
 Nous n'avons pas trouvé d'équivalent. C'est la forme honnête de l'affirmation : un flux qui
 compile un prompt en contrat, contrôle la réponse obtenue, demande une correction sur les
 seules lignes en échec, et signe un reçu qui se recalcule au lieu d'être cru.
@@ -40,6 +45,15 @@ Le reçu du premier essai a ensuite été vérifié sur une machine locale : tou
 vrais, clé ancrée, et **un seul octet** changé dans le fichier de réponse fait passer la
 vérification à `ANSWER_CHANGED`. C'est ce contre-essai qui donne sa valeur au premier : un
 vérificateur qui dit oui à tout dirait oui à celui-là aussi.
+
+Un troisième essai, le même jour, a été fait **à froid** : [CHATGPT.md](CHATGPT.md) collé
+tel quel, aucune autre consigne et aucune aide. Trois tours, moins de quatre minutes en
+tout, de l'installation au reçu. Deux faits de cet essai, datés et non promis :
+
+- ChatGPT a rangé le collage de dix mille caractères en **pièce jointe** et l'a suivi quand
+  même : la consigne survit donc au fait d'être transformée en fichier.
+- L'essai s'est déroulé au **niveau d'effort le plus bas** du modèle. Le document a suffi à
+  ce réglage, ce jour-là.
 
 « Essayé le 13 octobre 2026 » n'est pas « fonctionne partout ». Les deux plateformes
 changent sans nous, et rien ici n'est une promesse de compatibilité.

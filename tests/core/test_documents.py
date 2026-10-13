@@ -154,6 +154,54 @@ def test_the_readme_states_the_claim_in_its_defensible_form(name):
         assert absolute not in text.lower(), absolute
 
 
+RESERVE = {
+    "README.md": (
+        "It does not prove\nthat the content is right, and a rule of meaning is never checked."
+    ),
+    "README.fr.md": (
+        "Il ne\nprouve pas que le contenu est juste, et la règle de sens n'est jamais contrôlée."
+    ),
+}
+# The table of statuses is where the first reserve used to live, forty lines down.
+LATE = {"README.md": "| `NON_VERIFIE` |", "README.fr.md": "| `NON_VERIFIE` |"}
+
+
+@pytest.mark.parametrize("name", ["README.md", "README.fr.md"])
+def test_the_reserve_is_in_the_lead_and_reads_on_its_own(name):
+    """The reader this sentence protects is the one who stops after the first paragraph.
+
+    Measured on 2026-10-13, before this was written: the first reserve in README.md stood on
+    line 53, inside the table of statuses, and the lead promised a checked answer and a
+    verifiable receipt with no caveat at all. A reserve that arrives after the promise
+    arrives too late, so its place is part of what is tested, not only its words.
+    """
+    text = read(name)
+    assert RESERVE[name] in text, RESERVE[name]
+    # Before the table it used to hide in, and inside the opening of the page.
+    assert text.index(RESERVE[name]) < text.index(LATE[name])
+    assert text.index(RESERVE[name]) < 1200
+    # It carries its own weight: no "see below", no pointer to the table.
+    sentence = text[text.index(RESERVE[name]) : text.index(RESERVE[name]) + 400]
+    for pointer in ("see below", "voir plus bas", "voir le tableau", "see the table"):
+        assert pointer not in sentence.lower(), pointer
+
+
+@pytest.mark.parametrize("name", ["README.md", "README.fr.md"])
+def test_the_cold_run_is_stated_as_a_dated_fact(name):
+    """A run with no help is the only one that says whether the document stands alone."""
+    text = read(name)
+    for fact in {
+        "README.md": ("cold", "attachment", "lowest effort setting", "13 October 2026"),
+        "README.fr.md": (
+            "à froid",
+            "pièce jointe",
+            "niveau d'effort le plus bas",
+            "13 octobre 2026",
+        ),
+    }[name]:
+        assert fact in text, fact
+
+
 def script(name):
     """A script of this repository, loaded by path: `scripts` is not a package."""
     import importlib.util
