@@ -568,7 +568,13 @@ def test_a_heading_made_of_thousands_of_limits_is_read_once():
     hostile = ("Pas plus de 3 mots. " * 30_000 + ":\nMentionne « Paris ».\n").encode()
     started = time.monotonic()
     compiled = compile_prompt(hostile)
-    assert time.monotonic() - started < 2.0
+    # The bound separates two orders of cost, and pins no machine's speed: reading this
+    # heading once takes well under a second here, while the reading this test guards
+    # against rescans all thirty thousand wordings for each of them -- nine hundred
+    # million steps, minutes rather than seconds. A bound of two seconds was pinning the
+    # speed of a machine instead: the GitHub Linux runner, shared, took 2.04 s and turned
+    # a linear reading into a red build.
+    assert time.monotonic() - started < 30.0
     # Every "Pas" belongs to a recognized limit: the heading denies nothing and names no
     # part, so the term below it is a plain rule, neither forbidden nor set aside.
     assert proposals(compiled)[-1][:4] == ("u2-contains-1", "mechanical", "contains", "Paris")
