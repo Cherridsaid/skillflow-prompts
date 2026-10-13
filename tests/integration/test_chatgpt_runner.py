@@ -1088,6 +1088,48 @@ def test_an_incomplete_installation_is_refused_before_anything_is_checked(tmp_pa
     assert not root.exists()
 
 
+def test_a_forbidden_term_rejects_the_answer_that_carries_it(tmp_path):
+    """The one denial a machine can settle, run from the real entry point.
+
+    A ban on a term was worth nothing until now: the compiler set it aside and the answer
+    was never checked against it. Here the ban is in the contract, the answer that carries
+    the term is rejected under its own name, and the corrected one passes -- the loop the
+    whole product is for, on a rule it could not express yesterday.
+    """
+    root = tmp_path / "travail"
+    prompt, answer = tmp_path / "prompt.txt", tmp_path / "answer.txt"
+    prompt.write_text("Présente la recette.\nNe mentionne pas « beurre ».\n", encoding="utf-8")
+    assert chatgpt("init", "--root", root)[0] == 0
+    code, compiled = chatgpt("prompt", "--root", root, "--file", prompt)
+    assert code == 0, compiled
+    rows = {r["id"]: r for r in compiled["units"]}
+    assert rows["u2-not-contains-1"]["kind"] == "mechanical"
+    assert rows["u2-not-contains-1"]["check"] == "ne contient pas « beurre »"
+
+    answer.write_text("Mélangez la farine et le beurre, puis laissez reposer.", encoding="utf-8")
+    code, rejected = chatgpt("answer", "--root", root, "--file", answer)
+    assert code == 1 and rejected["counts"]["REJETE"] == 1
+    row = next(r for r in rejected["rows"] if r["id"] == "u2-not-contains-1")
+    assert row["status"] == "REJETE"
+    assert "terme interdit présent" in row["detail"] and "beurre" in row["detail"]
+
+    answer.write_text("Mélangez la farine et le lait, puis laissez reposer.", encoding="utf-8")
+    code, accepted = chatgpt("answer", "--root", root, "--file", answer)
+    assert code == 0, accepted
+    assert accepted["counts"]["REJETE"] == 0
+    row = next(r for r in accepted["rows"] if r["id"] == "u2-not-contains-1")
+    assert row["status"] == "VERIFIE" and row["detail"] == "terme interdit absent"
+    # Delivered and verified again from the receipt alone, like any other obligation.
+    code, delivered = chatgpt("deliver", "--root", root)
+    assert code == 0, delivered
+    folder = Path(delivered["receipt_folder"])
+    code, verified = chatgpt(
+        "verify", "--receipt", folder / "receipt.json", "--answer", folder / "answer.txt"
+    )
+    assert code == 0 and verified["ok"] is True
+    assert verified["counts"]["VERIFIE"] == 1
+
+
 def test_a_check_can_be_raised_after_an_answer_but_never_lowered(tmp_path):
     """Seeing a candidate, then deciding to have it checked, is the human order of things.
 

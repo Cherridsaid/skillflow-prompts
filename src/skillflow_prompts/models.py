@@ -170,7 +170,7 @@ class Contract(Strict):
                     raise ValueError("verifier role/kind mismatch")
                 p = obligation.parameters
                 allowed = {
-                    "text": {"contains", "min_length", "max_words"},
+                    "text": {"contains", "not_contains", "min_length", "max_words"},
                     "json": {"schema"},
                     "source": set(),
                     "connector": set(),
@@ -183,6 +183,9 @@ class Contract(Strict):
                     if (
                         not isinstance(p.get("contains", []), list)
                         or not all(isinstance(v, str) for v in p.get("contains", []))
+                        or not isinstance(p.get("not_contains", []), list)
+                        or not all(isinstance(v, str) for v in p.get("not_contains", []))
+                        or not all(v for v in p.get("not_contains", []))
                         or type(p.get("min_length", 1)) is not int
                         or p.get("min_length", 1) < 1
                         or type(p.get("max_words", 1)) is not int

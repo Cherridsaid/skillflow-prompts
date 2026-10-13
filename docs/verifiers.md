@@ -13,12 +13,28 @@ code that recomputed a status is the code that wrote it.
 | Parameter | What it checks | What it does not |
 |---|---|---|
 | `contains` | each term appears in the answer, as a substring, case-sensitive | that the term is used, or used correctly |
+| `not_contains` | no forbidden term appears, same substring rule | that the idea is absent: only the string is |
 | `min_length` | the answer holds at least that many characters | that the characters mean anything |
 | `max_words` | the answer holds at most that many words | that the words are the right ones |
 
-A prompt compiled by this tool only ever produces `max_words` and `contains`: the compiler
-recognizes a limit on the number of words, and a term asked for explicitly. Nothing else
-in a prompt becomes a mechanical check.
+A prompt compiled by this tool only ever produces `max_words`, `contains` and
+`not_contains`: a limit on the number of words, a term asked for explicitly, and a term
+forbidden explicitly. Nothing else in a prompt becomes a mechanical check.
+
+### The one denial that becomes a check
+
+`not_contains` is compiled from a ban **attached to a term**: "ne mentionne pas « Paris »",
+"n'utilise pas le mot « Paris »", `Do not mention "Paris"`, `Never use the word "Paris"`.
+The term must be quoted, because a tool that guessed which word was meant would forbid the
+wrong one.
+
+Every other denial keeps the behaviour it has always had: the wording is **set aside**,
+never proposed as a candidate, never confirmable. "N'utilise pas au plus trois mots" asks
+for the opposite of a limit, and confirming it would invert the prompt.
+
+A ban is searched as a plain substring, so "Paris" is found inside "Parisien", and a ban on
+a word does not stop the idea: a text can avoid "beurre" and describe it in full. The unit
+keeps its rule of meaning for that, under `NON_VERIFIE`.
 
 ### How a word is counted
 

@@ -21,7 +21,7 @@ seules lignes en échec, et signe un reçu qui se recalcule au lieu d'être cru.
 ## La boucle, dans une conversation
 
 1. Vous collez un prompt. L'outil lit ce qui y est **mécaniquement contrôlable** : une
-   limite de mots, un terme qui doit apparaître.
+   limite de mots, un terme qui doit apparaître, un terme qui ne doit pas.
 2. Chaque obligation est affichée avec son statut. Ce que l'outil reconnaît mais met de
    côté, sous une portée ou une condition, est affiché comme **candidat** et ne rejette
    jamais rien tant que vous ne l'avez pas confirmé nommément.

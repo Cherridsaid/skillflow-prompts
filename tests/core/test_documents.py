@@ -98,6 +98,8 @@ def test_chatgpt_md_carries_the_steps_a_new_conversation_needs():
     assert "C:\\sfp" in text and "INSTALL_INCOMPLETE" in text
     # Warnings on stderr are not failures, and the reader must not stop on one.
     assert "Ignore `stderr`" in text
+    # Three mechanical checks and no more, the forbidden term named with its reserve.
+    assert "terme interdit" in text and "n'évite pas l'idée" in text
 
 
 REQUIRED = {
@@ -279,6 +281,7 @@ def test_the_verifiers_document_names_what_the_code_does():
         "max_words",
         "contains",
         "min_length",
+        "not_contains",
         "independent_channel_required",
         "retrieval_integrity_only",
         "invalid_json",

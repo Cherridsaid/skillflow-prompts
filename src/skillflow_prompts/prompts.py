@@ -97,6 +97,32 @@ GAP = (
     r"(?:\s*(?:le|la|les|l['’]|un|une|des|du|ce|cette|ces|the|a|an|this|these|that|"
     r"mots?|termes?|expressions?|phrases?|words?|terms?|strings?))*\s*"
 )
+# A ban attached to a term is the one denial a machine can check: a string is absent or it
+# is not. The ban must be attached to the term itself -- "ne mentionne pas « Paris »" --
+# because that is the only form where what is forbidden is the term and nothing else. Every
+# other denial keeps the behaviour it had: set aside, never proposed, since confirming the
+# opposite of what a prompt says must stay impossible.
+# The sentence must end right after the term. A requirement may be read more loosely than
+# it is written -- "mentionne « Paris » dans la conclusion" is checked as "mentions Paris",
+# which can only pass what the instruction also passes. A ban cannot: "do not mention
+# « Paris » twice" allows one mention, and banning the term outright would reject an answer
+# the prompt accepts. Extra words after a ban may only weaken it, so the ban is not claimed.
+FORBIDDEN = [
+    # `GAP` already opens on `\s*`: a `\s+` written before it would let two quantifiers
+    # share the same run of spaces, and a hundred thousand spaces in an untrusted prompt
+    # would then cost minutes. Measured before the fix: 2 000 spaces 0,27 s, 4 000 0,97 s,
+    # 8 000 3,89 s -- four times the cost for twice the input.
+    re.compile(
+        rf"\b(?:ne|n['’])\s*(?:mentionne|cite|utilise|emploie|inclus|écris|ecris)[rz]?s?\s+"
+        rf"(?:pas|jamais){GAP}{QUOTED}\s*(?=[.!?]|$)",
+        re.I,
+    ),
+    re.compile(
+        rf"\b(?:do\s+not|do\s+n['’]t|don['’]t|never)\s+"
+        rf"(?:mention|use|include|write|cite)s?{GAP}{QUOTED}\s*(?=[.!?]|$)",
+        re.I,
+    ),
+]
 CONTAINS = [
     re.compile(
         r"\b(?:mentionne[rz]?|cite[rz]?|inclu(?:s|re|ez)|conti(?:ens|ent|enne|enir|enez))"
@@ -575,6 +601,18 @@ def detect(text):
     # mots" and the "ou" of "3 mots ou moins" belong to that wording, and reading them as a
     # denial or an alternative of the unit would lose the term beside them -- a limit under
     # a scope must cost the term nothing.
+    # A ban attached to a term is read before anything else is judged, and its wording is
+    # hidden from the readings below exactly as a limit's is: the "pas" of "ne mentionne
+    # pas « Paris »" belongs to that ban, so it must not be read as a denial of the unit,
+    # and the term it forbids must not be read again as a term the unit asks for.
+    bans = []
+    for pattern in FORBIDDEN:
+        for match in pattern.finditer(text):
+            if covered[match.start()] or plain[match.start()] == MASK:
+                continue
+            bans.append(match)
+            merged.append([match.start(), match.end()])
+            covered[match.start() : match.end()] = b"\1" * (match.end() - match.start())
     gate = hide(plain, merged) if merged else plain
     # A term beside a denial is the opposite of a requirement: never a rule, never a
     # candidate, since confirming it would invert the prompt. A term beside an
@@ -582,6 +620,44 @@ def detect(text):
     # reader can confirm the one that was meant.
     denied = NEGATION.search(gate)
     blocker = None if denied else ALTERNATIVE.search(gate)
+    # A ban is judged by the same two readings as a requirement, and for the same reason: a
+    # ban that holds only under a condition ("si besoin, ne mentionne pas « Paris »") is not
+    # an unconditional check, and a ban the unit denies elsewhere is set aside like any
+    # other denied wording. Only then does it become a rule.
+    for match in bans:
+        ascii_quotes = match.group(1) is not None
+        term = match.group(1 if ascii_quotes else 2)
+        if denied:
+            continue
+        if blocker:
+            propose(candidates, seen, "not_contains", term, blocker.group())
+            continue
+        if outside(scopes, *match.span()):
+            # A ban named for one part of the answer forbids the term there and nowhere
+            # else. Applied to the whole answer it would reject a copy the prompt accepts,
+            # so it is proposed under the part it names, exactly as a scoped limit is. A
+            # requirement does not need this -- read for the whole answer it stays weaker
+            # than what was asked -- and that difference is the asymmetry this file owns.
+            propose(
+                candidates,
+                seen,
+                "not_contains",
+                term,
+                scoping[nearest(scopes, *match.span())],
+            )
+            continue
+        if ("not_contains", term) not in seen:
+            seen.add(("not_contains", term))
+            rules.append({"parameter": "not_contains", "value": term})
+        spans.append(match.span())
+        # The same reserve a requirement keeps: banning "the word X" is only approximated by
+        # banning the string X, so what is not checked stays a rule of meaning. A ban
+        # written as an exact string is checked exactly.
+        asked = text[match.start() : match.start(1 if ascii_quotes else 2)]
+        raw = None if ascii_quotes else TYPOGRAPHIC.search(match.group())
+        approximate = approximate or bool(QUALIFIER.search(asked))
+        if raw is not None and raw.group(1) != term:
+            approximate = approximate or bool(EXACT.search(asked))
     for pattern in CONTAINS:
         for match in pattern.finditer(text):
             if covered[match.start()]:
@@ -705,7 +781,7 @@ def compile_prompt(data, compiled_by="tool", confirmed=None, refused=None):
                     "max-words" if numbered[parameter] == 1 else f"max-words-{numbered[parameter]}"
                 )
             else:
-                name = f"contains-{numbered[parameter]}"
+                name = f"{parameter.replace('_', '-')}-{numbered[parameter]}"
             entry = {
                 "id": f"u{unit['n']}-{name}",
                 "class": "candidate" if "demoted_by" in rule else "mechanical",

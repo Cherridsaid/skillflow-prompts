@@ -384,6 +384,8 @@ def evaluate(compilations, answer):
 def describe(entry):
     if entry["parameter"] == "max_words":
         return f"au plus {entry['value']} mots"
+    if entry["parameter"] == "not_contains":
+        return f"ne contient pas « {entry['value']} »"
     return f"contient « {entry['value']} »"
 
 
@@ -398,6 +400,14 @@ def verdict(entry, result):
             "status": "REJETE",
             "detail": f"{result['words']} mots pour {entry['value']} au plus : "
             f"retire au moins {result['words'] - entry['value']} mots",
+        }
+    if entry["parameter"] == "not_contains":
+        if result["passed"]:
+            return {"status": "VERIFIE", "detail": "terme interdit absent"}
+        return {
+            "status": "REJETE",
+            "detail": f"terme interdit présent : « {entry['value']} » "
+            "(casse et accents comptent ; cherché tel quel, même à l'intérieur d'un mot)",
         }
     if result["passed"]:
         return {"status": "VERIFIE", "detail": "terme présent"}

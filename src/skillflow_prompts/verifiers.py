@@ -42,9 +42,14 @@ def check(obligation, inputs):
     if verifier == "text":
         text = inputs["artifact" if "artifact" in inputs else "message"].decode("utf-8")
         missing = [s for s in params.get("contains", []) if s not in text]
+        # A forbidden term is the one denial this file can settle: a string is in the text
+        # or it is not. Found as a substring, exactly as `contains` is: "Paris" is present
+        # in "Parisien", and the unit keeps its rule of meaning for what that misses.
+        present = [s for s in params.get("not_contains", []) if s in text]
         result = {
-            "passed": not missing and len(text) >= params.get("min_length", 1),
+            "passed": not missing and not present and len(text) >= params.get("min_length", 1),
             "missing_terms": missing,
+            "forbidden_terms": present,
             "length": len(text),
         }
         if "max_words" in params:

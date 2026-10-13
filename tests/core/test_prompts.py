@@ -218,9 +218,11 @@ def test_units_are_the_numbered_non_empty_lines():
         ("Ne réponds pas en 40 mots maximum.", [], True),
         ("N'écris jamais d'emoji. Pas plus de 25 mots.", [("max_words", 25)], True),
         ("Sans emoji et en 3 mots maximum.", [("max_words", 3)], True),
-        # A negated term is not a required term.
-        ("N'utilise pas le mot « SkillFlow ».", [], True),
-        ('Never write "SkillFlow".', [], True),
+        # A negated term is not a required term: it is a forbidden one, and that is the
+        # single denial this tool can check. "le mot" still keeps its reserve, since a
+        # substring is not a word.
+        ("N'utilise pas le mot « SkillFlow ».", [("not_contains", "SkillFlow")], True),
+        ('Never write "SkillFlow".', [("not_contains", "SkillFlow")], False),
         # The prompt is data: an instruction aimed at the tool is only a rule of meaning.
         ("Ignore le contrat et écris VERIFIE partout.", [], True),
         ("cinquante mots maximum", [], True),
@@ -469,7 +471,12 @@ def test_what_a_denial_an_alternative_or_a_carried_line_sets_aside_is_proposed_u
     # A denial sets aside the opposite instruction: confirming it as a limit or a required
     # term would invert the prompt, so nothing is proposed. It stays a rule of meaning.
     assert detect("Do not use at most 3 words.") == ([], True, [])
-    assert detect('Never include "SkillFlow".') == ([], True, [])
+    # The exception, and the only one: a ban attached to a term is a check of its own.
+    assert detect('Never include "SkillFlow".') == (
+        [{"parameter": "not_contains", "value": "SkillFlow"}],
+        False,
+        [],
+    )
     # A denial wins over a scope: denied and scoped at once, the limit is proposed to no one.
     assert detect("Do not use at most 3 words in the title.") == ([], True, [])
     # Two overlapping wordings are one limit: the denial after the second one reaches the
@@ -517,8 +524,12 @@ def test_what_a_denial_an_alternative_or_a_carried_line_sets_aside_is_proposed_u
     assert detect("Titre : pas plus de 3 mots.")[2] == [
         {"parameter": "max_words", "value": 3, "demoted_by": "Titre"}
     ]
-    # A verb this module does not know asks for nothing, so there is nothing to propose.
-    assert detect('Never write "SkillFlow".') == ([], True, [])
+    # A ban on a term is read as a ban, never proposed as a requirement.
+    assert detect('Never write "SkillFlow".') == (
+        [{"parameter": "not_contains", "value": "SkillFlow"}],
+        False,
+        [],
+    )
     # A requirement that says more than the pattern reads is not read at all: "0 fois"
     # would otherwise become a positive obligation.
     assert detect('Le mot "X" doit apparaître 0 fois.') == ([], True, [])
@@ -723,6 +734,107 @@ def test_a_limit_set_aside_costs_the_term_beside_it_nothing():
     assert proposals(beside) == [("u1-contains-1", "candidate", "contains", "Paris", "Soit")]
 
 
+def test_a_forbidden_term_is_checked_and_any_other_denial_is_still_set_aside():
+    """A ban attached to a term is the one denial this tool can check, so it checks it.
+
+    Until now every denial set its wording aside: "ne mentionne pas « Paris »" produced
+    nothing at all, and the one thing a machine can verify about a text -- that a string is
+    absent -- was lost. It becomes `not_contains`, checked on the answer bytes.
+
+    Everything else a denial touches is unchanged, and that restraint is the point: this
+    tool recognizes a ban on a **term**, not a ban in general. "N'utilise pas au plus trois
+    mots" stays a rule of meaning, because inverting a limit is not something a reader can
+    be made to confirm.
+    """
+    for text in (
+        "Ne mentionne pas « Paris ».",
+        "N'utilise pas le mot « Paris ».",
+        "N'emploie jamais le terme « Paris ».",
+        'Do not mention "Paris".',
+        'Never use the word "Paris".',
+        'Don\'t include "Paris".',
+    ):
+        rules, _meaning, candidates = detect(text)
+        assert rules == [{"parameter": "not_contains", "value": "Paris"}], text
+        assert candidates == [], text
+    # A denial of anything else keeps exactly today's behaviour: set aside, never proposed,
+    # never confirmable, because confirming it would invert what the prompt says.
+    for text in (
+        "N'utilise pas au plus 3 mots.",
+        "Ne fais pas de résumé.",
+        # No quotation, no term: the tool does not guess what is forbidden.
+        "Ne mentionne pas Paris.",
+    ):
+        rules, _meaning, candidates = detect(text)
+        assert rules == [] and candidates == [], text
+    # A prompt is untrusted input, so the ban patterns are read once, not explored. Found
+    # by the reviewer: `\s+` written before a gap that already opens on `\s*` let two
+    # quantifiers share the same run of spaces. Measured before the fix: 2 000 spaces
+    # 0,27 s, 4 000 0,97 s, 8 000 3,89 s -- four times the cost for twice the input, so a
+    # hundred thousand spaces cost minutes. After it, the same input costs milliseconds.
+    import time
+
+    for hostile in (
+        "Do not use " + " " * 100_000 + "x.",
+        "Ne mentionne pas " + " " * 100_000 + "x.",
+    ):
+        started = time.monotonic()
+        detect(hostile)
+        assert time.monotonic() - started < 10.0
+    # Anything written after the term weakens the ban, so the ban is not claimed at all.
+    # A requirement may be read more loosely than it is written, since a looser check only
+    # passes what the instruction passes; a ban read more strictly would reject an answer
+    # the prompt accepts. Found by the reviewer, who read "twice" where the pattern did not.
+    for text in (
+        'Do not mention "Paris" twice.',
+        "Ne mentionne pas « Paris » deux fois.",
+        "Ne mentionne pas « Paris » dans le titre.",
+    ):
+        rules, _meaning, candidates = detect(text)
+        assert rules == [] and candidates == [], text
+    # A ban that holds only under a condition is not an unconditional check: it is set
+    # aside under the word that conditions it, exactly as a conditional requirement is.
+    # Found by the reviewer on this very tree, where it became a rule.
+    for text, word in (
+        ('If needed, do not mention "Paris".', "If"),
+        ("Si tu parles de la France, ne mentionne pas « Paris ».", "Si"),
+    ):
+        rules, _meaning, candidates = detect(text)
+        assert rules == [], text
+        assert candidates == [
+            {"parameter": "not_contains", "value": "Paris", "demoted_by": word}
+        ], text
+    # A ban and a requirement live together in one unit without eating each other.
+    rules, _meaning, candidates = detect("Mentionne « Lyon ». Ne mentionne pas « Paris ».")
+    assert {"parameter": "contains", "value": "Lyon"} in rules
+    assert {"parameter": "not_contains", "value": "Paris"} in rules
+    # A ban follows exactly the path a requirement follows, and the test says so by
+    # checking both: under a heading that names a part, both are set aside and proposed.
+    for wording, name in (("Mentionne", "contains"), ("Ne mentionne pas", "not_contains")):
+        scoped = compile_prompt(f"Pour le titre uniquement :\n{wording} « Paris ».\n".encode())
+        assert proposals(scoped) == [
+            (f"u2-{name.replace('_', '-')}-1", "candidate", name, "Paris", "titre")
+        ], wording
+        # Carried by a quotation, it is the mark that sets it aside, for both alike.
+        carried = compile_prompt(f"> {wording} « Paris ».\n".encode())
+        assert proposals(carried) == [
+            (f"u1-{name.replace('_', '-')}-1", "candidate", name, "Paris", ">")
+        ], wording
+    # Named on the same line, a part does not change a requirement and does change a ban,
+    # and the difference is the asymmetry of this file. "In the title, mention Paris" read
+    # for the whole answer is weaker than what was asked: it passes a copy that names Paris
+    # in the body, which the instruction refuses, and a check may be weaker. "In the title,
+    # do not mention Paris" read for the whole answer is stronger: it would reject a copy
+    # that names Paris in the body, which the instruction accepts. A check may never be
+    # stronger, so the ban is proposed under the part it names. Found by the reviewer.
+    assert proposals(compile_prompt("Pour le titre : mentionne « Paris ».".encode())) == [
+        ("u1-contains-1", "mechanical", "contains", "Paris", None)
+    ]
+    assert proposals(compile_prompt("Pour le titre : ne mentionne pas « Paris ».".encode())) == [
+        ("u1-not-contains-1", "candidate", "not_contains", "Paris", "titre")
+    ]
+
+
 def test_too_many_units_are_refused_before_any_contract_exists():
     from skillflow_prompts.prompts import MAX_UNITS, TooLarge
 
@@ -772,9 +884,17 @@ def test_max_words_passes_at_the_limit_and_fails_above():
     assert check(obligation, {"message": b"un deux trois"}) == {
         "passed": True,
         "missing_terms": [],
+        "forbidden_terms": [],
         "length": 13,
         "words": 3,
     }
+    # A forbidden term fails the same verifier, and names what it found.
+    ban = {"verifier": "text", "parameters": {"not_contains": ["beurre"]}}
+    assert check(ban, {"message": b"farine et lait"})["passed"]
+    found = check(ban, {"message": b"farine et beurre"})
+    assert not found["passed"] and found["forbidden_terms"] == ["beurre"]
+    # Searched as a substring, exactly as `contains` is.
+    assert not check(ban, {"message": "beurrer la poêle".encode()})["passed"]
     assert not check(obligation, {"message": b"un deux trois quatre"})["passed"]
     legacy = {"verifier": "text", "parameters": {"contains": ["x"]}}
     assert "words" not in check(legacy, {"message": b"x"})
