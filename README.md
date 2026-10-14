@@ -57,7 +57,15 @@ receipt. Two facts from that run, dated and not promised:
 - It ran at the model's **lowest effort setting**. The document was enough at that
   setting, on that day.
 
-"Tried on 13 October 2026" is not "works everywhere". Both platforms change under us, and
+A fourth run, on **14 October 2026**, used the **published** code (`65b8ae7`): a new
+ChatGPT conversation in work mode, the zip and CHATGPT.md attached, one sentence of
+instruction. Install, one-minute trial and receipt in under two minutes, at the lowest
+effort setting. The receipt was then re-verified on a Windows machine with an anonymous
+clone of this repository: eleven checks out of eleven, the key anchored by the `key_id`
+read in the chat, and the same code fingerprint in ChatGPT's Linux sandbox and on
+Windows. One byte changed in the answer, and a foreign key, are both refused.
+
+"Tried on 13 and 14 October 2026" is not "works everywhere". Both platforms change under us, and
 nothing here is a compatibility promise.
 
 ![Decorative only: a go / no-go gauge, one end carrying an orange band. It shows no output of the tool.](docs/images/go-no-go-gauge.png)

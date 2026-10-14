@@ -58,7 +58,15 @@ tout, de l'installation au reçu. Deux faits de cet essai, datés et non promis 
 - L'essai s'est déroulé au **niveau d'effort le plus bas** du modèle. Le document a suffi à
   ce réglage, ce jour-là.
 
-« Essayé le 13 octobre 2026 » n'est pas « fonctionne partout ». Les deux plateformes
+Un quatrième essai, le **14 octobre 2026**, a utilisé le code **publié** (`65b8ae7`) :
+une nouvelle conversation ChatGPT en mode travail, le zip et CHATGPT.md joints, une seule
+phrase de consigne. Installation, essai d'une minute et reçu en moins de deux minutes, au
+niveau d'effort le plus bas. Le reçu a ensuite été revérifié sur une machine Windows avec
+un clone anonyme de ce dépôt : onze contrôles sur onze, la clé ancrée par le `key_id` lu
+dans le chat, et la même empreinte du code dans le bac à sable Linux de ChatGPT et sous
+Windows. Un octet changé dans la réponse, et une clé étrangère, sont tous deux refusés.
+
+« Essayé les 13 et 14 octobre 2026 » n'est pas « fonctionne partout ». Les deux plateformes
 changent sans nous, et rien ici n'est une promesse de compatibilité.
 
 ![Décoratif seulement : une jauge passe / passe pas, dont une extrémité porte une bande orange. Ne montre aucune sortie de l'outil.](docs/images/go-no-go-gauge.png)
