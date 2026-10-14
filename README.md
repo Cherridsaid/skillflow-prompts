@@ -124,6 +124,11 @@ The state folder is `%LOCALAPPDATA%\skillflow-prompts\travail`, **outside the re
 the signing key and the history live there, so re-cloning or moving the repository does not
 lose them. Do not move that folder.
 
+That file has to stay in the project folder, next to `pyproject.toml`: that is where it
+finds the program to run. To have it elsewhere, on the desktop for instance, make a
+**shortcut** to it -- right-click, Send to, Desktop. A **copy** would not work, and the
+window would tell you so.
+
 If `uv` is not installed, the window says so and stays open. If port 8770 is already taken
 -- another page of the protocol, for instance -- it says that too and nothing is opened:
 close the other page, or run the command below with `--port` and another number.

@@ -127,6 +127,11 @@ Le dossier d'état est `%LOCALAPPDATA%\skillflow-prompts\travail`, **hors du dé
 de signature et l'historique vivent là, donc recloner ou déplacer le dépôt ne les perd pas.
 Ne déplacez pas ce dossier.
 
+Ce fichier doit rester dans le dossier du projet, à côté de `pyproject.toml` : c'est là
+qu'il trouve le programme à lancer. Pour l'avoir ailleurs, sur le Bureau par exemple, faites
+un **raccourci** vers lui — clic droit, Envoyer vers, Bureau. Une **copie**, elle, ne
+marcherait pas, et la fenêtre vous le dirait.
+
 Si `uv` n'est pas installé, la fenêtre le dit et reste ouverte. Si le port 8770 est déjà
 pris — une page du protocole déjà ouverte, par exemple — elle le dit aussi, et rien n'est
 ouvert : fermez l'autre page, ou lancez la commande ci-dessous avec `--port` et un autre

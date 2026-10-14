@@ -173,6 +173,13 @@ def test_an_action_on_a_folder_that_moved_elsewhere_is_refused(tmp_path):
     # folder, or displaying no compilation at all -- then nothing read contradicts it.
     assert "const named = folder !== null;" in shown
     assert "const blank = compiled === null;" in shown
+    # And when the identity is lost, what was displayed of that folder goes with it. Clearing
+    # only the identity left the verdicts on screen, so a page that had compiled nothing
+    # counted as "blank" -- that state being computed on the prompt box alone -- and its next
+    # check went out unnamed, measured against the folder opened elsewhere. The page says why
+    # instead of emptying itself in silence.
+    assert "if (folder && current === null) {\n    folder = null;\n    fresh();" in shown
+    assert "Ce dossier n'existe plus" in shown
     assert '$("check").disabled = busy || stale || current === null || !(named || blank);' in shown
     assert "n'est plus celui en cours" in shown
     # The four actions that touch a folder obey the same rule, confirming included: its
@@ -217,10 +224,11 @@ def test_an_action_on_a_folder_that_moved_elsewhere_is_refused(tmp_path):
     # `fresh()` and nowhere else, which is what « seul un dossier neuf remet ce compte à
     # zéro » means -- and it is asserted here.
     assert "function fresh(){\n  checked = null;\n  budget = null;" in shown
-    # Counting the resets would be the real control, and it cannot pass yet: `refresh()`
-    # clears the count too, on the very path that same review refused. That correction needs
-    # its own phase, so this test does not pretend to cover it.
-    assert shown.count("budget = null") == 3
+    # And now the real control the review asked for: two occurrences only, the declaration
+    # and the one inside `fresh()`. `refresh()` used to clear the count itself, on the very
+    # path that review refused; it calls `fresh()` instead, so a new folder is the only
+    # thing that puts this count back to nothing.
+    assert shown.count("budget = null") == 2
     assert "if (!folder && (kept || (compiled === null && delivered)))" in shown
     # And a refusal takes nothing away: the files of an earlier delivery stay offered, since
     # erasing them at the moment one is told no is taking back what was honestly obtained.
@@ -229,7 +237,7 @@ def test_an_action_on_a_folder_that_moved_elsewhere_is_refused(tmp_path):
     assert "let folder = null;" in html
     assert "const named = folder ? {...body, case_id: folder} : {...body};" in html
     assert "folder = wrong ? null : text(payload.case_id);" in html
-    assert "if (folder && current === null) { folder = null; budget = null; }" in html
+    assert "if (folder && current === null) {\n    folder = null;\n    fresh();" in html
 
     # The folder being shown goes through, and a made-up identifier never reaches a command.
     walked = page.post("/answer", json={"text": RIGHT, "case_id": beta["case_id"]})
@@ -487,6 +495,43 @@ def test_the_command_that_serves_the_page_binds_the_loopback_only(tmp_path):
     assert "--port" in json.dumps(usage, ensure_ascii=False)
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows cmd.exe required")
+def test_the_launcher_copied_away_from_its_project_says_so_and_never_calls_uv(tmp_path):
+    """The fourth failure mode, found by accident after the previous phase closed.
+
+    Copied out of the repository, the launcher answered `Failed to spawn:
+    skillflow-prompts`, in English, with no word of its own -- and then wrote « La page est
+    arretee » about a page that had never started. Both are now its business, and this test
+    is the measurement itself rather than a string in a file: it copies the launcher out,
+    runs it, and reads what it said. Empty stdin so the final `pause` returns at once.
+    """
+    import shutil
+    import subprocess
+
+    launcher = Path(__file__).resolve().parents[2] / "ouvrir-le-protocole.cmd"
+    copied = tmp_path / launcher.name
+    shutil.copy(launcher, copied)
+    assert not (tmp_path / "pyproject.toml").exists()
+
+    done = subprocess.run(
+        ["cmd", "/c", str(copied)],
+        capture_output=True,
+        text=True,
+        input="",
+        timeout=180,
+        encoding="utf-8",
+        errors="replace",
+    )
+    said = done.stdout + done.stderr
+    assert done.returncode == 1, said
+    assert "copie hors du projet" in said
+    assert "RACCOURCI" in said
+    # And uv is never reached: its English line was the whole defect.
+    assert "Failed to spawn" not in said
+    # The false claim is gone with it: nothing says the page stopped, since it never ran.
+    assert "La page est arretee" not in said
+
+
 def test_the_page_does_not_take_the_port_the_demo_already_uses():
     """8765 was skillflow-mcp's demonstration port, inherited by accident.
 
@@ -530,6 +575,16 @@ def test_the_launcher_opens_the_page_without_a_command_being_typed():
     assert "if errorlevel 1 pause" in text and text.rstrip().endswith("pause")
     # It says what to do when uv is missing, which is the one failure Python cannot report.
     assert "uv n'est pas trouve" in text
+    # And the other one Python cannot report: the file copied away from its project. uv
+    # answered "Failed to spawn", in English, with no word from the launcher -- measured
+    # after the previous phase closed. The check lives here because Python is out of reach
+    # when the project is missing.
+    assert 'if not exist "%~dp0pyproject.toml"' in text
+    assert "copie hors du projet" in text and "RACCOURCI" in text
+    # Two different endings, said differently: it ran and stopped, or it never started. The
+    # single sentence claimed the stop in both cases.
+    assert "if errorlevel 1 echo La page ne s est pas ouverte." in text
+    assert "if not errorlevel 1 echo La page est arretee." in text
     # And no accented byte: the console code page would turn them into noise.
     assert text == text.encode("ascii", "replace").decode("ascii")
 

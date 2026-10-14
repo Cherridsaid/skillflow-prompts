@@ -501,7 +501,18 @@ async function refresh(){
   // Plus aucun dossier côté serveur : celui de cette page est clos, remis ou annulé. On
   // l'oublie, et « Livrer » rend alors le dernier reçu. Le dossier d'un AUTRE onglet, lui,
   // n'est jamais adopté : `folder` ne change que sur une compilation faite ici.
-  if (folder && current === null) { folder = null; budget = null; }
+  // Et ce qui était affiché de ce dossier part avec son identité. `fresh()` seul laissait
+  // les verdicts à l'écran : une page qui n'avait rien compilé se croyait alors « vide »,
+  // puisque cet état était calculé sur la seule zone de prompt, son contrôle suivant
+  // partait sans identité, et il était mesuré contre le dossier ouvert ailleurs. Les
+  // verdicts d'un dossier qu'on ne sait plus nommer ne sont pas une consigne : ce sont une
+  // affirmation sur un dossier disparu. Trouvé par la relecture de la dette de P9.
+  if (folder && current === null) {
+    folder = null;
+    fresh();
+    $("checked").textContent =
+      "Ce dossier n'existe plus : il a été remis ou annulé ailleurs. Ses verdicts sont retirés.";
+  }
   delivered = payload.last_receipt || null;
   buttons();
   // Et si un reçu attend, le dire : un onglet rouvert après une remise a l'air vide, et
