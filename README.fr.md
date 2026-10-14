@@ -112,6 +112,21 @@ tourner dans cet état, sous `INSTALL_INCOMPLETE`, au lieu de planter plus tard.
 
 ## Sans terminal
 
+**Double-cliquez sur `ouvrir-le-protocole.cmd`**, à la racine du dépôt. La page s'ouvre
+dans votre navigateur et la fenêtre noire reste là : c'est elle qui fait tourner la page.
+Pour arrêter, fermez-la, ou faites Ctrl-C dedans.
+
+Le dossier d'état est `%LOCALAPPDATA%\skillflow-prompts\travail`, **hors du dépôt** : la clé
+de signature et l'historique vivent là, donc recloner ou déplacer le dépôt ne les perd pas.
+Ne déplacez pas ce dossier.
+
+Si `uv` n'est pas installé, la fenêtre le dit et reste ouverte. Si le port 8765 est déjà
+pris — une page du protocole déjà ouverte, par exemple — elle le dit aussi, et rien n'est
+ouvert : fermez l'autre page, ou lancez la commande ci-dessous avec `--port` et un autre
+numéro.
+
+La même chose à la main, si vous préférez le terminal :
+
 ```console
 uv run skillflow-prompts chatgpt serve --root D:\skillflow\travail
 ```

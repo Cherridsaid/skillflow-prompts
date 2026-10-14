@@ -16,7 +16,9 @@ only values this module checks itself -- an identifier, a name -- ever reach a c
 line. The page listens on the loopback, refuses any other Host and any other origin.
 """
 
+import os
 import re
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -41,6 +43,10 @@ POLICY = (
     "connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; form-action 'none'; "
     "base-uri 'none'"
 )
+# Les trois fins possibles de `serve`, nommées, parce que deux d'entre elles se sont
+# confondues : un port pris et un arrêt demandé avant l'écoute rendaient la même réponse, et
+# le lanceur annonçait un port pris sur un port libre.
+SERVED, TAKEN, CANCELLED = "served", "taken", "cancelled"
 # What may travel to a command line: the launcher's own identifiers and a plain name.
 NAME = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$", re.I)
 # A folder identifier, as the launcher writes them: thirty-two hex characters.
@@ -221,9 +227,90 @@ def create_page(root):
     return app
 
 
-def serve(root, port=PORT):
-    """Open the page on the loopback and nowhere else."""
+def serve(root, port=PORT, opened=None):
+    """Open the page on the loopback and nowhere else, and say so only once it listens.
+
+    The server starts in a thread and this waits for it to be LISTENING before anything is
+    announced or opened. Two reasons, both measured as failures of the first version: a port
+    already taken has to be a refusal that names itself instead of a traceback nobody reads;
+    and the address handed to a browser must be the one actually served -- otherwise a
+    double-click shows whatever else holds this port, and the page it shows is not this one.
+
+    `opened` is called with the address once it is live. The tests pass their own, so nothing
+    reaches a real browser; the launcher passes the browser.
+    """
+    import socket
+    import threading
+
     import uvicorn
 
-    uvicorn.run(create_page(root), host=HOST, port=port, log_level="warning")
-    return 0
+    # Le port est essaye ICI, avant qu'uvicorn soit lance : sinon sa propre ligne ERROR
+    # arrive au-dessus du refus, et Said lit une trace anglaise avant la phrase qui lui dit
+    # quoi faire. Un essai libere le port aussitot, donc il reste une course : si quelqu un
+    # le prend entre-temps, `started` restera faux et le refus sera le meme.
+    tried = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        if os.name != "nt":
+            # Exactement ce que fait asyncio, et donc uvicorn : SO_REUSEADDR sur POSIX, pas
+            # sous Windows. Sans lui, un port en TIME_WAIT après un vrai arrêt était
+            # annoncé PRIS alors que le serveur, lui, aurait su le prendre — la sonde
+            # mentait sur ce qu'elle sonde. Avec lui sous Windows, à l'inverse, elle
+            # réussirait à se poser sur un port qu'un autre écoute vraiment.
+            tried.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        tried.bind((HOST, port))
+    except OSError:
+        return TAKEN, None
+    finally:
+        tried.close()
+
+    page = uvicorn.Server(
+        uvicorn.Config(create_page(root), host=HOST, port=port, log_level="warning")
+    )
+    listening = threading.Thread(target=page.run, daemon=True)
+    where = None
+    # Ctrl-C arrive dans le fil principal, pas dans celui du serveur, et il peut arriver à
+    # N'IMPORTE QUEL moment : pendant que le serveur démarre, pendant que le navigateur
+    # s'ouvre, ou pendant l'attente. L'arrêt est donc dans un `finally` et nulle part
+    # ailleurs. Il était attaché à la seule attente : une interruption au démarrage
+    # remontait alors en trace, sans que le serveur ait jamais reçu l'ordre de s'arrêter.
+    # Refusé par la revue.
+    try:
+        # Le démarrage lui-même est DANS le try : une interruption tombée entre le start et
+        # le try laissait un fil vivant sans jamais recevoir l'ordre de s'arrêter. La
+        # fenêtre est minuscule, et c'est précisément pourquoi elle n'a aucune raison de
+        # rester ouverte. Sixième refus de la revue.
+        listening.start()
+        while not page.started and listening.is_alive():
+            time.sleep(0.05)
+        if not page.started:
+            return TAKEN, None
+        where = f"http://{HOST}:{port}/"
+        if opened:
+            try:
+                opened(where)
+            except Exception:
+                # Un navigateur qui refuse de s'ouvrir n'est pas une raison de tuer la
+                # page : l'adresse est déjà écrite à l'écran, et elle suffit.
+                pass
+        while listening.is_alive():
+            listening.join(0.2)
+    except KeyboardInterrupt:
+        # Interrompu AVANT d'avoir écouté : ce n'est pas un port pris, c'est un arrêt
+        # demandé. Les deux rendaient la même réponse, et le lanceur annonçait alors un
+        # port pris sur un port libre — un diagnostic faux, refusé par la revue.
+        if where is None:
+            return CANCELLED, None
+    finally:
+        # L'attente n'a PAS de délai. Elle en avait un de cinq secondes, et au-delà cette
+        # fonction rendait la main : le lanceur écrivait alors « Page arrêtée » pendant que
+        # le serveur tenait encore le port. Un message faux sur l'état de sa propre page,
+        # refusé par la revue aussi. Un deuxième Ctrl-C est absorbé, parce qu'il ne rendrait
+        # l'arrêt ni plus vrai ni plus rapide ; s'il ne finissait jamais, il reste à fermer
+        # la fenêtre, et le lanceur le dit.
+        page.should_exit = True
+        while listening.is_alive():
+            try:
+                listening.join(0.2)
+            except KeyboardInterrupt:
+                continue
+    return SERVED, where

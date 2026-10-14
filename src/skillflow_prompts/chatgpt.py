@@ -1426,16 +1426,49 @@ def action_serve(args):
     returns: a page nobody can find is a page nobody opens, and stdout carries the one JSON
     object this launcher promises, so the address goes to stderr.
     """
-    from .page import HOST, PORT, serve
+    from .page import CANCELLED, HOST, PORT, TAKEN, serve
 
     # La racine est lue AVANT que l'adresse soit annoncée. L'ordre inverse affichait
     # « Ouvre http://127.0.0.1:8765/ » puis le refus du chemin : on attend alors une page
     # qui n'ouvrira jamais. Trouvé par la revue sur la commande du README lui-même.
     root = root_path(args.root)
     port = int(args.port or PORT)
-    where = f"http://{HOST}:{port}/"
-    print(f"Ouvre {where} — Ctrl-C pour arrêter.", file=sys.stderr, flush=True)
-    serve(root, port)
+
+    def announce(where):
+        """Dit l'adresse RÉELLEMENT écoutée, et seulement une fois qu'elle l'est.
+
+        stdout porte l'unique objet JSON que ce lanceur promet, donc l'adresse va sur
+        stderr. Avec --open, le navigateur est ouvert sur cette même adresse : un
+        double-clic doit tomber sur CETTE page, jamais sur ce qui occupait le port.
+        """
+        print(
+            f"Ouvre {where} — Ctrl-C pour arrêter, ou ferme cette fenêtre.",
+            file=sys.stderr,
+            flush=True,
+        )
+        if args.open:
+            import webbrowser
+
+            webbrowser.open(where)
+
+    how, where = serve(root, port, opened=announce)
+    if how == TAKEN:
+        raise Refusal(
+            "PORT_TAKEN",
+            f"Le port {port} est déjà pris : rien n'a été ouvert",
+            f"Une autre page du protocole tourne peut-être déjà sur http://{HOST}:{port}/ — "
+            "ferme-la, ou relance avec --port suivi d'un autre numéro",
+            exit_code=2,
+        )
+    if how == CANCELLED:
+        # Arrêt demandé avant que la page écoute : ce n'est pas une panne, et surtout ce
+        # n'est pas un port pris.
+        return 0, {
+            "ok": True,
+            "root": str(root),
+            "url": None,
+            "summary": "Arrêtée avant d'avoir écouté. Rien n'a été ouvert.",
+        }
     return 0, {
         "ok": True,
         "root": str(root),
@@ -1466,6 +1499,8 @@ def parser():
             item.add_argument("--file", required=True)
         if name == "serve":
             item.add_argument("--port", type=int)
+            # Le lanceur cliquable le passe ; la ligne de commande ne l'impose à personne.
+            item.add_argument("--open", action="store_true")
         if name == "confirm":
             item.add_argument("--by", required=True)
             item.add_argument("--id", action="append")

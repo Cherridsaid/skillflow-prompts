@@ -109,6 +109,20 @@ refuses to run in that state, under `INSTALL_INCOMPLETE`, instead of crashing la
 
 ## Without a terminal
 
+**Double-click `ouvrir-le-protocole.cmd`** at the root of the repository. The page opens in
+your browser and the black window stays: that window is what runs the page. To stop, close
+it, or press Ctrl-C inside it.
+
+The state folder is `%LOCALAPPDATA%\skillflow-prompts\travail`, **outside the repository**:
+the signing key and the history live there, so re-cloning or moving the repository does not
+lose them. Do not move that folder.
+
+If `uv` is not installed, the window says so and stays open. If port 8765 is already taken
+-- another page of the protocol, for instance -- it says that too and nothing is opened:
+close the other page, or run the command below with `--port` and another number.
+
+The same thing by hand, if you prefer a terminal:
+
 ```console
 uv run skillflow-prompts chatgpt serve --root D:\skillflow\work
 ```

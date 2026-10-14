@@ -8,7 +8,11 @@ verify a receipt -- and it implements none of it: every route calls the launcher
 """
 
 import json
+import os
 import re
+import socket
+import time
+from pathlib import Path
 
 import pytest
 
@@ -465,6 +469,308 @@ def test_the_command_that_serves_the_page_binds_the_loopback_only(tmp_path):
     assert page_module.HOST == "127.0.0.1"
     _code, usage = run(["serve", "--help"])
     assert "--port" in json.dumps(usage, ensure_ascii=False)
+
+
+def test_the_launcher_opens_the_page_without_a_command_being_typed():
+    """Said does not type a command, so the front door is a file he double-clicks.
+
+    What a test can hold of a `.cmd` is its shape, and its shape is the whole design: it
+    must stay flat -- no parenthesised block, no label -- because a `.cmd` written with Unix
+    line endings breaks on exactly those, and it must keep its window open to the end, since
+    a window that blinks and closes teaches its user that the tool is broken. The rest of
+    the correctness lives in Python, which is tested. The double-click itself was driven on
+    this machine and the measurement is in the phase note.
+    """
+    launcher = Path(__file__).resolve().parents[2] / "ouvrir-le-protocole.cmd"
+    text = launcher.read_text(encoding="utf-8")
+    assert "chatgpt serve --root" in text and "--open" in text
+    # An absolute root, built from the machine and not from the folder one happens to be in,
+    # and kept OUTSIDE the repository: the signing key and the history live there.
+    assert "%LOCALAPPDATA%" in text and "travail" in text
+    assert "%~dp0travail" not in text
+    # Flat: nothing that depends on how the lines end. Written first as an expression
+    # ending in `or True`, which made it pass whatever the file held -- a test that proves
+    # nothing, caught by the reviewer. A parenthesis anywhere now fails it.
+    assert "(" not in text and ")" not in text
+    assert "goto" not in text
+    assert "if errorlevel 1 pause" in text and text.rstrip().endswith("pause")
+    # It says what to do when uv is missing, which is the one failure Python cannot report.
+    assert "uv n'est pas trouve" in text
+    # And no accented byte: the console code page would turn them into noise.
+    assert text == text.encode("ascii", "replace").decode("ascii")
+
+
+def test_the_page_says_its_address_only_once_it_listens(tmp_path, monkeypatch):
+    """A double-click must land on THIS page, never on what held the port.
+
+    So the address is announced, and the browser opened, only after the server reports
+    listening; and a port already taken is a refusal that names itself instead of a
+    traceback. `serve` hands the address to a callback, so a test can hold it without
+    anything reaching a real browser.
+    """
+    from skillflow_prompts import page as page_module
+
+    seen, made = [], []
+    monkeypatch.setattr(page_module, "create_page", lambda root: _Nothing())
+
+    class Listening:
+        started = True
+
+        def __init__(self, config):
+            self.should_exit = False
+            self.stopped = False
+            made.append(self)
+
+        def run(self):
+            while not self.should_exit:
+                time.sleep(0.01)
+            # Un serveur qui prend son temps : c'est exactement le cas que le délai de cinq
+            # secondes faisait mentir.
+            time.sleep(0.4)
+            self.stopped = True
+
+    monkeypatch.setattr("uvicorn.Server", Listening, raising=False)
+    monkeypatch.setattr("uvicorn.Config", lambda *a, **k: None, raising=False)
+
+    def stop(where):
+        seen.append(where)
+        made[0].should_exit = True
+
+    assert page_module.serve(tmp_path, 8766, opened=stop) == ("served", "http://127.0.0.1:8766/")
+    assert seen == ["http://127.0.0.1:8766/"]
+    # And it returned only once the server had REALLY stopped. The wait had a five second
+    # deadline, past which this returned while the port was still held and the launcher
+    # wrote « Page arrêtée » -- a false statement about the state of its own page, refused
+    # by the review. The fake server below takes its time to stop, and `stopped` is set at
+    # the very end of its run.
+    assert made[0].stopped is True
+    # A browser that refuses to open is not a reason to kill the page: the address is
+    # already on the screen.
+    assert page_module.serve(tmp_path, 8766, opened=_refuses(made)) == (
+        "served",
+        "http://127.0.0.1:8766/",
+    )
+    assert made[-1].stopped is True
+
+    # And a Ctrl-C at the worst moment -- while the browser is being opened -- still stops
+    # the server. The stop used to hang off the waiting loop alone, so an interruption
+    # before it came out as a traceback with the server never told to stop. Refused by the
+    # review, and this is the scenario it named.
+    def interrupted(where):
+        raise KeyboardInterrupt
+
+    assert page_module.serve(tmp_path, 8766, opened=interrupted) == (
+        "served",
+        "http://127.0.0.1:8766/",
+    )
+    assert made[-1].should_exit is True and made[-1].stopped is True
+
+
+def test_a_stop_at_the_very_instant_the_thread_starts_still_stops_the_server(tmp_path, monkeypatch):
+    """The smallest window of all, and the reason it had no business staying open.
+
+    `listening.start()` sat outside the try, so an interruption landing between the start
+    and the try left a live thread that was never told to stop. Raised by the review, which
+    also noted that the existing test only interrupts at `page.started`.
+    """
+    import threading
+
+    from skillflow_prompts import page as page_module
+
+    made = []
+
+    class Listening:
+        started = True
+
+        def __init__(self, config):
+            self.should_exit = False
+            self.stopped = False
+            made.append(self)
+
+        def run(self):
+            while not self.should_exit:
+                time.sleep(0.01)
+            self.stopped = True
+
+    monkeypatch.setattr(page_module, "create_page", lambda root: _Nothing())
+    monkeypatch.setattr("uvicorn.Server", Listening, raising=False)
+    monkeypatch.setattr("uvicorn.Config", lambda *a, **k: None, raising=False)
+
+    started = threading.Thread.start
+
+    def start_then_interrupt(self):
+        started(self)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(threading.Thread, "start", start_then_interrupt)
+    assert page_module.serve(tmp_path, 8768) == ("cancelled", None)
+    assert made[0].should_exit is True and made[0].stopped is True
+
+
+def test_the_probe_asks_the_port_the_same_way_the_server_would_take_it(tmp_path, monkeypatch):
+    """A probe that lies about what it probes is worse than no probe.
+
+    On POSIX, a port left in TIME_WAIT by a real connection is refused to a plain bind but
+    granted to the server, which goes through asyncio and its SO_REUSEADDR: the probe said
+    PORT_TAKEN on a port the page could have served. Under Windows that same option does
+    the opposite, letting a bind land on a port someone else is really listening on. So the
+    probe follows asyncio exactly -- the option on POSIX, never on Windows. Raised by the
+    review, which named the Linux sequence; this test holds the rule on either platform.
+    """
+    import socket as socket_module
+
+    from skillflow_prompts import page as page_module
+
+    options = []
+    real = socket_module.socket
+
+    class Spy(real):
+        def setsockopt(self, level, option, value):
+            options.append((level, option, value))
+            return super().setsockopt(level, option, value)
+
+    monkeypatch.setattr(socket_module, "socket", Spy)
+    monkeypatch.setattr(page_module, "create_page", lambda root: _Nothing())
+    monkeypatch.setattr("uvicorn.Config", lambda *a, **k: None, raising=False)
+
+    class Dead:
+        started = False
+
+        def __init__(self, config):
+            self.should_exit = False
+
+        def run(self):
+            return None
+
+    monkeypatch.setattr("uvicorn.Server", Dead, raising=False)
+    page_module.serve(tmp_path, 8767)
+
+    reuse = (socket_module.SOL_SOCKET, socket_module.SO_REUSEADDR, 1)
+    assert (reuse in options) is (os.name != "nt")
+
+
+def test_a_stop_asked_before_the_page_listens_is_not_a_port_that_is_taken(tmp_path, monkeypatch):
+    """Two different endings used to look the same, and one of them lied.
+
+    A Ctrl-C while the server is still starting returned exactly what a taken port returned,
+    so the launcher announced a taken port on a free one -- a false diagnosis of the only
+    failure this phase exists to report well. Refused by the review. The three endings are
+    now named: served, taken, cancelled.
+    """
+    from skillflow_prompts import page as page_module
+
+    class Slow:
+        """A server that is asked about its start, and answers with a Ctrl-C.
+
+        The interruption has to land in the waiting loop of `serve`, in the main thread, and
+        nowhere else: patching `time.sleep` for that leaked into the server's own thread and
+        into the next test.
+        """
+
+        def __init__(self, config):
+            self.should_exit = False
+
+        @property
+        def started(self):
+            raise KeyboardInterrupt
+
+        def run(self):
+            while not self.should_exit:
+                time.sleep(0.01)
+
+    monkeypatch.setattr(page_module, "create_page", lambda root: _Nothing())
+    monkeypatch.setattr("uvicorn.Server", Slow, raising=False)
+    monkeypatch.setattr("uvicorn.Config", lambda *a, **k: None, raising=False)
+    assert page_module.serve(tmp_path, 8766) == ("cancelled", None)
+
+    monkeypatch.undo()
+    monkeypatch.setattr(page_module, "serve", lambda root, port, opened=None: ("cancelled", None))
+    code, result = run(["serve", "--root", str(tmp_path), "--port", "8766"])
+    assert code == 0 and result["ok"] is True and result["url"] is None
+    assert "Arrêtée avant d'avoir écouté" in result["summary"]
+
+
+def test_a_port_already_taken_is_a_refusal_that_names_itself(tmp_path, monkeypatch):
+    from skillflow_prompts import page as page_module
+
+    class Dead:
+        started = False
+
+        def __init__(self, config):
+            pass
+
+        def run(self):
+            return None
+
+    monkeypatch.setattr(page_module, "create_page", lambda root: _Nothing())
+    monkeypatch.setattr("uvicorn.Server", Dead, raising=False)
+    monkeypatch.setattr("uvicorn.Config", lambda *a, **k: None, raising=False)
+    # Nothing is announced and nothing is opened: `serve` says it never listened.
+    taken_too = page_module.serve(tmp_path, 8766, opened=lambda where: pytest.fail(where))
+    assert taken_too == ("taken", None)
+
+    code, result = run(["serve", "--root", str(tmp_path), "--port", "8766"])
+    assert code == 2 and result["error"]["code"] == "PORT_TAKEN"
+    assert "8766" in result["error"]["message"]
+
+    # And the real mechanism, with a real port held: the refusal comes from the probe, so
+    # uvicorn is never started and its own English ERROR line never lands above the French
+    # sentence that says what to do. Measured on this machine, with a page already running:
+    # the launcher printed the refusal alone and kept its window open.
+    held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    held.bind(("127.0.0.1", 0))
+    held.listen(1)
+    taken = held.getsockname()[1]
+
+    def never(*a, **k):
+        raise AssertionError("uvicorn ne doit pas etre lance quand le port est pris")
+
+    monkeypatch.setattr("uvicorn.Server", never, raising=False)
+    try:
+        assert page_module.serve(tmp_path, taken, opened=never) == ("taken", None)
+    finally:
+        held.close()
+
+
+def test_only_the_launcher_asks_for_a_browser_and_it_gets_the_served_address(tmp_path, monkeypatch):
+    """`--open` is what the double-click adds, and the command line imposes it on nobody.
+
+    The address handed to the browser is the one `serve` says it listens on, never one built
+    beside it: that is the whole reason the browser is opened from inside, after the bind.
+    """
+    import webbrowser
+
+    from skillflow_prompts import page as page_module
+
+    asked = []
+    monkeypatch.setattr(webbrowser, "open", lambda where: asked.append(where))
+
+    def served(root, port, opened=None):
+        opened("http://127.0.0.1:9/")
+        return "served", "http://127.0.0.1:9/"
+
+    monkeypatch.setattr(page_module, "serve", served)
+
+    code, _result = run(["serve", "--root", str(tmp_path), "--open"])
+    assert code == 0 and asked == ["http://127.0.0.1:9/"]
+
+    asked.clear()
+    code, _result = run(["serve", "--root", str(tmp_path)])
+    assert code == 0 and asked == []
+
+
+class _Nothing:
+    """An application that is never served: these tests hold the decision, not the server."""
+
+
+def _refuses(made):
+    """A browser that throws, and the page that must survive it."""
+
+    def opened(where):
+        made[-1].should_exit = True
+        raise OSError("aucun navigateur sur cette machine")
+
+    return opened
 
 
 def test_a_relative_root_is_refused_before_the_address_is_announced(capsys):
