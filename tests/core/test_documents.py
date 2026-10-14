@@ -41,6 +41,22 @@ def test_the_readme_no_longer_denies_the_launcher(name):
     assert "c26ff68" in text
 
 
+@pytest.mark.parametrize("name", ["README.md", "README.fr.md", "CHATGPT.md"])
+def test_the_door_that_needs_no_terminal_is_documented_with_its_limits(name):
+    """A door nobody is told about is a door nobody opens, and a page is a claim too.
+
+    The page runs the whole protocol without a command line, so every document that
+    explains how to run this tool names it -- and names what it is not: local only, no
+    authority of its own, and never a replacement for the verification at home.
+    """
+    text = read(name)
+    assert "chatgpt serve" in text
+    assert "127.0.0.1" in text
+    assert "boucle locale" in text or "loopback" in text
+    # What makes a status true is still `verify` on the three files, page or no page.
+    assert "verify" in text
+
+
 def test_chatgpt_md_carries_the_steps_a_new_conversation_needs():
     text = read("CHATGPT.md")
     for step in (

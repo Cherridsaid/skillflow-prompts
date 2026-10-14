@@ -107,6 +107,29 @@ refuses to run in that state, under `INSTALL_INCOMPLETE`, instead of crashing la
 
 ![Decorative only: a stone on a ruled sheet. It shows no output of the tool.](docs/images/stone-grid.png)
 
+## Without a terminal
+
+```console
+uv run skillflow-prompts chatgpt serve --root D:\skillflow\work
+```
+
+The state folder is given as an **absolute** path, always the same one: the signing key and
+the history live there. On Linux or macOS, `/srv/skillflow/work`. A relative path is refused
+-- `ROOT_RELATIVE` -- before the page is opened.
+
+Open `http://127.0.0.1:8765/`. The page walks the whole protocol: paste the prompt, read
+what will be checked and what will not, copy the prompt for ChatGPT, paste the answer,
+confirm a candidate, deliver, verify a receipt.
+
+It implements none of it. Every button calls the same command as below and shows its answer
+unchanged: a second reading of a prompt would be a second behaviour to keep in step, and
+one of the two would be wrong without anyone noticing.
+
+What it is not, written beside what it is: it listens on the **loopback** only -- measured
+on this machine, unreachable on its seven other interfaces -- it holds no authority, and it
+does not replace the verification at home. What makes a status true is still `verify`, run
+again on the three files of the receipt.
+
 ## The demo
 
 ```console

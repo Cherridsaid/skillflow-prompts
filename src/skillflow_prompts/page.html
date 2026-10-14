@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>skillflow-prompts — le protocole</title>
+<!-- Pas d'icône : sans cette ligne le navigateur demande /favicon.ico et la console
+     garde une erreur 404 qui n'en est pas une. -->
+<link rel="icon" href="data:,">
+<style>
+body{font:16px system-ui;background:#0d1728;color:#eff5ff;max-width:1100px;margin:auto;padding:24px}
+button,input{padding:10px;margin:4px 4px 4px 0;background:#203655;color:#fff;border:1px solid #9bafc8;border-radius:6px;font:inherit}
+button:disabled{opacity:.5}button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid #88ffd2}
+textarea{width:100%;min-height:9em;padding:10px;background:#15233b;color:#eff5ff;border:1px solid #4c6480;border-radius:6px;font:15px ui-monospace,monospace}
+table{width:100%;border-collapse:collapse;margin:12px 0}th,td{padding:8px;text-align:left;border-bottom:1px solid #4c6480;vertical-align:top}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#15233b;padding:12px;border-radius:6px}
+h1{font-size:28px;margin:16px 0}h2{font-size:21px;margin:28px 0 8px}
+.VERIFIE{color:#88ffd2}.REJETE{color:#ff9d9d}.NON_VERIFIE{color:#ffd79b}.CANDIDAT,.candidate{color:#c7b3ff}
+.note{color:#9bafc8}label{display:inline-block;margin:6px 8px 6px 0}
+</style>
+<main>
+<h1>skillflow-prompts — le protocole</h1>
+<p class="note" id="where">État : en cours de lecture…</p>
+
+<h2>1. Le prompt</h2>
+<p class="note">Colle ton prompt, une consigne par ligne. Rien n'est envoyé ailleurs : cette page ne parle qu'à ta machine.</p>
+<textarea id="prompt" spellcheck="false" aria-label="Le prompt"></textarea>
+<button id="compile">Compiler</button>
+<button id="copy" disabled>Copier le prompt pour ChatGPT</button>
+<p id="compiled" role="status" aria-live="polite">Prochaine étape : colle ton prompt et clique « Compiler ».</p>
+<div id="units"></div>
+
+<h2>2. Les candidats</h2>
+<p class="note">Une limite ou un terme reconnus mais mis de côté. Affichés, jamais appliqués. Si tu les confirmes, ils deviennent des contrôles au prochain dossier.</p>
+<div id="candidates"><p class="note">Aucun pour l'instant.</p></div>
+<label for="by">Ton nom</label><input id="by" value="said" autocomplete="off" spellcheck="false">
+<button id="confirm" disabled>Confirmer les cochés</button>
+<button id="refuse" disabled>Refuser les cochés</button>
+<p id="confirmed" role="status" aria-live="polite"></p>
+
+<h2>3. La réponse</h2>
+<p class="note">Colle la réponse de ChatGPT, exactement comme elle est écrite. Corrige seulement ce qui revient <span class="REJETE">REJETE</span>.</p>
+<textarea id="answer" spellcheck="false" aria-label="La réponse"></textarea>
+<button id="check" disabled>Vérifier</button>
+<p id="checked" role="status" aria-live="polite"></p>
+<div id="rows"></div>
+
+<h2>4. La remise</h2>
+<button id="deliver" disabled>Livrer</button>
+<p id="delivered" role="status" aria-live="polite"></p>
+<p id="files"></p>
+<pre id="receipt" hidden></pre>
+
+<h2>5. Revérifier un reçu</h2>
+<p class="note">Les trois fichiers du reçu, recalculés ici : rien n'est relu du reçu, tout est recompilé depuis le prompt.</p>
+<label for="r-receipt">receipt.json</label><textarea id="r-receipt" spellcheck="false"></textarea>
+<label for="r-answer">answer.txt</label><textarea id="r-answer" spellcheck="false"></textarea>
+<label for="r-prompt">prompt.txt</label><textarea id="r-prompt" spellcheck="false"></textarea>
+<button id="verify">Revérifier</button>
+<p id="verified" role="status" aria-live="polite"></p>
+<pre id="checks" hidden></pre>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const text = value => value === null || value === undefined ? "" : String(value);
+function fill(node, html){ node.replaceChildren(); node.insertAdjacentHTML("beforeend", html); }
+function escaped(value){ const box = document.createElement("span"); box.textContent = text(value); return box.innerHTML; }
+
+async function ask(path, body){
+  const options = body === undefined
+    ? {headers: {"accept": "application/json"}}
+    : {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(body)};
+  // Une coupure ne doit jamais remonter comme une exception : elle laisserait « occupé » à
+  // vrai et tous les boutons fermés pour de bon, page morte jusqu'au rechargement.
+  // Cinquième refus de la revue. Ici une panne de réseau est un refus comme un autre, et
+  // la page reprend la main.
+  let answered;
+  try { answered = await fetch(path, options); }
+  catch (coupure) {
+    return {ok: false, error: {code: "INJOIGNABLE",
+      message: "L'outil n'écoute plus : relance « chatgpt serve », puis réessaie."}};
+  }
+  const payload = await answered.json().catch(() => ({ok: false, error: {message: "réponse illisible"}}));
+  if (!answered.ok && payload.error) { payload.refused = true; }
+  return payload;
+}
+
+// Le dossier que CETTE page affiche, envoyé avec toute action qui agit dessus. Deux onglets
+// sur le même état et le second a annulé le dossier du premier : sans cet identifiant, le
+// premier livrerait un reçu sur un prompt qu'il n'a jamais montré. Le serveur refuse, et
+// dit de recharger. Dixième refus de la revue.
+// Le dossier de CETTE page est celui qu'elle a compilé elle-même, PAS celui que le serveur
+// a en cours. Les confondre rouvrait la porte d'un cran : premier clic sur « Livrer »
+// refusé en CASE_MOVED, puis le rafraîchissement de fin adoptait le dossier de l'autre
+// onglet, et le second clic livrait Beta en affichant Alpha. Onzième refus de la revue.
+// Nommé `folder` et pas `mine` : chaque gestionnaire tient déjà un `const mine = ++turn`
+// pour numéroter sa demande, qui masquait celui-ci. Écrire dedans levait « Assignment to
+// constant variable » et cassait « Compiler » — invisible pour un test qui cherche des
+// chaînes dans le HTML, trouvé en pilotant un vrai navigateur.
+let folder = null;
+// Le compte de tours vu par CETTE page au dernier contrôle : le numéro de version du
+// dossier. L'identifiant ne bouge pas quand une réponse est contrôlée, donc deux onglets
+// sur le MEME dossier pouvaient se croiser — l'un contrôlait sa réponse, l'autre livrait un
+// reçu sur celle du premier. Douzième refus de la revue.
+let budget = null;
+function showing(body){
+  const named = folder ? {...body, case_id: folder} : {...body};
+  if (budget !== null) { named.rounds = budget; }
+  return named;
+}
+
+function trouble(payload){
+  if (payload.error) { return payload.error.message || payload.error.code; }
+  return null;
+}
+
+function table(head, lines){
+  return "<table><thead><tr>" + head.map(name => "<th scope=\"col\">" + escaped(name) + "</th>").join("") +
+    "</tr></thead><tbody>" + lines.join("") + "</tbody></table>";
+}
+
+let candidates = [];
+// Le texte REELLEMENT compilé, tel que le lanceur l'a lu. Ce qui est copié pour ChatGPT
+// est celui-là, jamais le contenu de la zone de texte : sinon on colle « Beta » dans
+// ChatGPT alors que le contrat contrôle « Alpha », et la réponse est jugée sur un prompt
+// qui n'a jamais été envoyé. Signalé par la revue, et c'est tout le sujet de cet outil.
+let compiled = null;
+// La dernière compilation affichée, gardée pour être remise telle quelle si le texte
+// revient au mot près : taper un caractère puis l'effacer vidait la table des unités et des
+// candidats sans jamais les rendre, alors que le contrat n'avait pas bougé. Dix-septième
+// refus de la revue.
+let lastUnits = null;
+// Les demandes sont numérotées et seule la dernière compte. Deux clics sur « Compiler »
+// sans attendre, et les réponses peuvent revenir dans l'autre ordre : la page afficherait
+// alors Alpha pendant que le contrat du serveur contrôle Beta -- et copierait Alpha.
+// Signalé par la revue, reproduit dans un navigateur, et une réponse périmée est jetée.
+let turn = 0;
+
+// L'état de chaque bouton tient en un seul endroit et il est recalculé en entier à chaque
+// fois : une demande en vol les ferme tous, et au retour chacun retrouve sa propre
+// condition. Écrit ainsi parce que la revue a trouvé un cul-de-sac dans la première forme :
+// après un nom refusé, « Confirmer » et « Refuser » restaient fermés pour de bon, et
+// corriger le nom ne servait plus à rien.
+// « Occupé » est un état à part, pas un argument : sinon une frappe dans la zone de texte
+// appelle `freshness`, qui recalcule les boutons et ROUVRE « Compiler » pendant qu'une
+// demande est en vol. Deux compilations partent alors, le serveur peut les traiter dans
+// l'autre ordre, et la page affiche Beta pendant que le contrat contrôle Alpha. Quatrième
+// refus de la revue, et le plus discret des quatre.
+let busy = false;
+// La zone de texte ne dit plus ce que le contrat contrôle. Un état à part de `compiled`,
+// parce que les deux ne veulent pas dire la même chose : `compiled` vide signifie « cette
+// page n'a rien compilé », ce qui est le cas après un rechargement, alors que le serveur
+// garde son dossier ; périmé signifie « ce qui est affiché n'est pas ce qui serait livré ».
+let stale = false;
+// Le dossier TEL QUE LE SERVEUR LE VOIT. Ce qu'on peut vérifier ou livrer dépend de lui,
+// jamais de la mémoire de cette page : sinon recharger l'onglet au milieu du parcours
+// ferme « Vérifier » alors que le dossier est bien là, et recompiler annulerait le dossier
+// pour en ouvrir un autre. Sixième refus de la revue.
+let current = null;
+// La réponse TELLE QUE LE SERVEUR L'A CONTRÔLÉE, et le fait que la zone ne la dise plus.
+// Même mensonge que pour le prompt, de l'autre côté : contrôler la réponse A, la remplacer
+// par B, livrer — et le reçu attestait A pendant que Said lisait B. Huitième refus de la
+// revue. Un seul drapeau n'aurait pas suffi : une réponse modifiée doit fermer « Livrer »
+// mais garder « Vérifier » ouvert, puisque corriger la réponse est tout le parcours.
+let checked = null;
+let unchecked = false;
+// Le dernier reçu, tel que le serveur le connaît. Sans lui, fermer « Livrer » dès qu'il n'y
+// a plus de dossier en cours posait une trappe : un onglet rechargé juste après une remise
+// perdait les trois fichiers, alors qu'ils sont sur le disque et que le lanceur sait les
+// rendre — il revérifie le dernier reçu et le réaffiche. Neuvième refus de la revue, et
+// c'est ma correction précédente qui l'avait creusée.
+let delivered = null;
+// Le reçu que CETTE page a obtenu, distinct du dernier reçu du serveur. Les confondre
+// laissait passer la dernière porte : A livre Alpha, B livre Beta, A reclique « Livrer » et
+// reçoit les fichiers de Beta en affichant Alpha. Douzième refus de la revue.
+let kept = null;
+function buttons(){
+  // Agir sur le dossier du serveur demande l'une de ces deux choses, jamais autre chose :
+  // la page sait le NOMMER — elle a appris son identifiant d'une réponse du lanceur — ou
+  // elle n'affiche AUCUNE compilation, et alors rien de ce qu'on lit ne le contredit.
+  // Le cas qui manquait : le dossier affiché avait disparu (remis ou annulé ailleurs), la
+  // page gardait Alpha sous les yeux sans pouvoir le nommer, et son action suivante partait
+  // sans identité puis adoptait le dossier ouvert entre-temps. Dixième refus de la revue.
+  const named = folder !== null;
+  const blank = compiled === null;
+  $("compile").disabled = busy;
+  $("verify").disabled = busy;
+  $("copy").disabled = busy || stale || compiled === null;
+  $("check").disabled = busy || stale || current === null || !(named || blank);
+  // Reprendre un reçu suit la même règle : soit la page tient le SIEN, soit elle n'affiche
+  // aucune compilation. Sinon elle montrait Alpha et reprenait le dernier reçu du serveur,
+  // devenu celui de Beta — treizième refus de la revue, la même porte, un cran plus loin.
+  const reprise = (named === false && (kept !== null || blank)) && delivered !== null && current === null;
+  $("deliver").disabled =
+    busy || stale || unchecked ||
+    !(((named || blank) && current !== null) || reprise);
+  // Confirmer agit sur le dossier comme les autres, et c'était la seule action restée hors
+  // de la règle : après une remise, les candidats affichés venaient d'un dossier que la
+  // page ne savait plus nommer, et la confirmation partait s'appliquer au dossier ouvert
+  // ailleurs. Onzième refus de la revue, dernière des quatre actions à rentrer dans le rang.
+  $("confirm").disabled = $("refuse").disabled =
+    busy || stale || candidates.length === 0 || !(named || blank);
+}
+
+// La nature d'une unité, telle que l'outil la nomme, dans la langue de Said. Affichage
+// seulement : le statut vient du lanceur, jamais d'ici.
+const NATURES = {
+  mechanical: "contrôlé mécaniquement",
+  candidate: "mis de côté",
+  semantic: "sens : à toi de la respecter",
+  attested: "attesté par un tiers",
+  context: "contexte",
+};
+const nature = unit => unit.kind === "candidate"
+  ? "mis de côté par « " + text(unit.demoted_by) + " » — à confirmer pour qu'il contrôle"
+  : (NATURES[unit.kind] || text(unit.kind));
+
+// Ce que le lanceur répond nomme des commandes, parce que c'est la ligne de commande qui
+// parle, et ce texte reste tel quel. La page, elle, dit sur quoi cliquer : une page qui
+// répond « chatgpt deliver » n'a pas remplacé le terminal, elle l'a décrit.
+function step(where){
+  return {
+    prompt: "Prochaine étape : copie le prompt, colle-le dans ChatGPT, puis colle sa réponse plus bas et clique « Vérifier ».",
+    answer: "Prochaine étape : clique « Livrer » pour obtenir le reçu, ou corrige ce qui est REJETE et clique « Vérifier » à nouveau.",
+    rejected: "Corrige uniquement ce qui est REJETE, ne touche pas au reste, puis clique « Vérifier ».",
+    delivered: "Prochaine étape : enregistre les trois fichiers, ils sont ce qu'on rejoue.",
+    empty: "Prochaine étape : colle ton prompt et clique « Compiler ».",
+  }[where];
+}
+
+function showUnits(payload){
+  lastUnits = payload;
+  const lines = (payload.units || []).map(unit =>
+    "<tr><td>" + unit.unit + "</td><td>" + escaped(unit.text) + "</td><td class=\"" + escaped(unit.kind) + "\">" +
+    escaped(unit.check || "rien de mécanique : à toi de la respecter") + "</td><td>" +
+    escaped(nature(unit)) + "</td></tr>");
+  fill($("units"), lines.length ? table(["Unité", "Ta consigne", "Ce qui est contrôlé", "Nature"], lines) : "");
+  candidates = (payload.units || []).filter(unit => unit.kind === "candidate");
+  if (candidates.length) {
+    fill($("candidates"), candidates.map(unit =>
+      "<label><input type=\"checkbox\" value=\"" + escaped(unit.id) + "\"> " + escaped(unit.text) +
+      " — " + escaped(unit.check) + "</label>").join("<br>"));
+  } else {
+    fill($("candidates"), "<p class=\"note\">Aucun pour l'instant.</p>");
+  }
+  buttons();
+}
+
+function chosen(){
+  return [...document.querySelectorAll("#candidates input:checked")].map(box => box.value);
+}
+
+$("compile").onclick = async () => {
+  const mine = ++turn;
+  busy = true;
+  buttons();
+  $("compiled").textContent = "Lecture…";
+  const payload = await ask("/prompt", {text: $("prompt").value});
+  // Une demande plus récente est partie entre-temps : cette réponse est périmée, et
+  // l'afficher serait montrer un contrat qui n'est plus celui du serveur.
+  // Une demande plus récente est en vol : elle rendra la main, pas celle-ci.
+  if (mine !== turn) { return; }
+  busy = false;
+  buttons();
+  const wrong = trouble(payload);
+  $("compiled").textContent = (wrong ? "Refusé : " + wrong : step("prompt")) + " — " + text(payload.summary);
+  // Ce que le serveur dit avoir lu, et rien d'autre.
+  compiled = wrong ? null : text(payload.prompt_text);
+  // Le dossier que cette page vient d'ouvrir : c'est lui qu'elle montre, et lui seul
+  // qu'elle nommera dans ses actions.
+  folder = wrong ? null : text(payload.case_id);
+  fresh();
+  // Une compilation refusée ne donne aucun contrat : ce qui est dans la zone de texte
+  // n'est contrôlé par rien, donc rien ne part et rien ne se livre avant une compilation
+  // qui tient.
+  stale = Boolean(wrong);
+  showUnits(payload);
+  freshness();
+  await refresh();
+};
+
+$("copy").onclick = async () => {
+  if (compiled === null) { $("compiled").textContent = "Rien de compilé : clique « Compiler »."; return; }
+  try { await navigator.clipboard.writeText(compiled); $("compiled").textContent = "Prompt compilé copié. Colle-le dans ChatGPT."; }
+  catch (refused) { $("compiled").textContent = "Copie refusée par le navigateur : sélectionne le texte compilé à la main."; }
+};
+
+// Modifier le prompt périme la compilation : le contrat en cours contrôle l'ancien texte,
+// donc plus rien ne part vers ChatGPT et plus aucune réponse n'est contrôlée avant d'avoir
+// recompilé. Ce n'est pas une précaution d'interface, c'est la seule façon de ne pas juger
+// une réponse contre un prompt que Said n'a pas envoyé.
+// Vérifié à chaque frappe ET au retour d'une compilation : une réponse lente peut arriver
+// après une modification de la zone de texte, et la page afficherait alors un contrat sur
+// Alpha, sans un mot, pendant que Said lit Beta devant lui.
+// La page ne devine jamais le prompt du serveur. Deux cas, et un seul texte honnête dans
+// chacun : elle a compilé elle-même, alors la boîte doit dire exactement ce qu'elle a
+// compilé ; elle n'a rien compilé — un onglet rouvert au milieu du parcours — et alors la
+// seule boîte qui ne contredit rien est une boîte VIDE. Le moindre mot tapé dedans serait
+// un prompt que personne n'a compilé, et livrer donnerait un reçu sur un autre texte.
+// Septième refus de la revue : la première forme sortait ici quand `compiled` était vide,
+// donc après un rechargement on pouvait taper Beta et livrer Alpha sans un mot.
+function freshness(){
+  const expected = compiled === null ? "" : compiled;
+  const changed = $("prompt").value !== expected;
+  if (changed === stale) { return; }
+  stale = changed;
+  if (stale) {
+    candidates = [];
+    $("compiled").textContent = "Le prompt a changé : clique « Compiler » avant de copier, de vérifier ou de livrer.";
+    fill($("units"), "");
+    fill($("candidates"), "<p class=\"note\">Aucun pour l'instant.</p>");
+    // Les verdicts affichés portaient sur l'ancien prompt. Les laisser, c'est montrer un
+    // VERIFIE pour un texte que personne n'a contrôlé.
+    fill($("rows"), "");
+    $("checked").textContent = "";
+  } else {
+    // Le texte compilé est revenu au mot près, ou la boîte est redevenue vide.
+    $("compiled").textContent = compiled === null
+      ? step("empty")
+      : "Le prompt est de nouveau celui qui a été compilé.";
+    // Et ce qui était affiché de ce contrat revient avec lui : il n'a jamais changé.
+    if (compiled !== null && lastUnits) { showUnits(lastUnits); }
+  }
+  buttons();
+}
+$("prompt").oninput = freshness;
+
+// Même règle pour la réponse, avec une différence qui compte : les verdicts RESTENT
+// affichés. Ils disent quoi corriger, et les effacer retirerait la consigne à la seconde
+// où on la suit. Ils sont étiquetés pour ce qu'ils sont — la mesure de la réponse
+// précédente — et c'est « Livrer » qui se ferme, pas « Vérifier ».
+function answered(){
+  const expected = checked === null ? "" : checked;
+  const changed = $("answer").value !== expected;
+  if (changed === unchecked) { return; }
+  unchecked = changed;
+  $("checked").textContent = unchecked
+    ? "Cette réponse n'est pas contrôlée pour ce dossier : clique « Vérifier » avant de livrer."
+    : "La réponse est de nouveau celle qui a été contrôlée.";
+  buttons();
+}
+$("answer").oninput = answered;
+
+// Un dossier neuf efface ce qui appartenait au précédent : la réponse contrôlée, le tour
+// consommé et les verdicts affichés. Sans cela, recompiler laissait la page croire sa
+// réponse contrôlée — elle l'était contre un contrat qui n'existe plus — et « Livrer »
+// partait sans compte de tours, donc sans numéro de version. Quatorzième refus de la revue.
+function fresh(){
+  checked = null;
+  budget = null;
+  fill($("rows"), "");
+  answered();
+}
+
+async function decide(key){
+  const mine = ++turn;
+  busy = true;
+  buttons();
+  const body = showing({by: $("by").value});
+  body[key] = chosen();
+  const payload = await ask("/confirm", body);
+  // Une demande plus récente est en vol : elle rendra la main, pas celle-ci.
+  if (mine !== turn) { return; }
+  busy = false;
+  buttons();
+  const wrong = trouble(payload);
+  $("confirmed").textContent = wrong ? "Refusé : " + wrong : text(payload.summary);
+  // Une confirmation compile un autre contrat et rend ses unités : la table suit, sans
+  // recoller le prompt, et le dossier de cette page devient celui-là.
+  if (!wrong && payload.units) {
+    folder = text(payload.case_id) || folder;
+    fresh();
+    showUnits(payload);
+  }
+  await refresh();
+}
+$("confirm").onclick = () => decide("ids");
+$("refuse").onclick = () => decide("refuse");
+
+$("check").onclick = async () => {
+  const mine = ++turn;
+  busy = true;
+  buttons();
+  $("checked").textContent = "Contrôle…";
+  const payload = await ask("/answer", showing({text: $("answer").value}));
+  // Une demande plus récente est en vol : elle rendra la main, pas celle-ci.
+  if (mine !== turn) { return; }
+  busy = false;
+  buttons();
+  const wrong = trouble(payload);
+  const rejected = (payload.counts || {}).REJETE > 0 || payload.exit_code !== 0;
+  // Ce que le serveur dit avoir contrôlé, et rien d'autre.
+  checked = wrong ? null : text(payload.answer_text);
+  unchecked = Boolean(wrong);
+  // Un onglet rouvert ne sait pas dans quel dossier il travaille, puisqu'il n'a rien
+  // compilé ici. Le contrôle le lui dit, et dès lors ses actions le nomment. Sans cela,
+  // « Livrer » n'envoyait que le compte de tours — et deux dossiers différents peuvent
+  // avoir le même compte. Neuvième refus de la revue : Beta livré sous l'affichage d'Alpha.
+  if (!wrong) { folder = text(payload.case_id) || folder; }
+  // Le tour qui vient d'être consommé : la version du dossier que cette page a sous les
+  // yeux, opposée au serveur à la remise.
+  // Un refus ne fait pas oublier le numéro de version : le perdre laissait l'action
+  // suivante partir sans rien à opposer, et le serveur l'acceptait. Dix-huitième refus de
+  // la revue. Seul un dossier neuf remet ce compte à zéro, dans `fresh`.
+  if (!wrong && typeof payload.rounds_remaining === "number") { budget = payload.rounds_remaining; }
+  $("checked").textContent = (wrong ? "Refusé : " + wrong + " " : "") +
+    step(rejected ? "rejected" : "answer") + " — " + text(payload.summary);
+  const lines = (payload.rows || []).map(row =>
+    "<tr><td>" + text(row.unit) + "</td><td>" + escaped(row.text) + "</td><td class=\"" + escaped(row.status) + "\">" +
+    escaped(row.status) + "</td><td>" + escaped(row.detail) + "</td></tr>");
+  fill($("rows"), lines.length ? table(["Unité", "Ta consigne", "Statut", "Mesure"], lines) : "");
+  // Vérifié au retour aussi : la zone a pu être modifiée pendant que le contrôle voyageait,
+  // et la page afficherait le verdict d'un texte qui n'est plus celui qu'on lit.
+  answered();
+  await refresh();
+};
+
+$("deliver").onclick = async () => {
+  const mine = ++turn;
+  busy = true;
+  buttons();
+  const wanted = showing({});
+  // Aucun dossier affiché ici mais un reçu existe : ce clic demande CE reçu, il ne livre
+  // rien. Dit ainsi, le serveur peut refuser si un dossier s'est ouvert ailleurs entre
+  // temps — sinon il remettrait celui-là sous un affichage qui parle d'autre chose.
+  if (!folder && (kept || (compiled === null && delivered))) { wanted.receipt = kept || delivered; }
+  const payload = await ask("/deliver", wanted);
+  // Une demande plus récente est en vol : elle rendra la main, pas celle-ci.
+  if (mine !== turn) { return; }
+  busy = false;
+  buttons();
+  const wrong = trouble(payload);
+  $("delivered").textContent = (wrong ? "Refusé : " + wrong : step("delivered")) + " — " + text(payload.summary);
+  // Un refus ne touche pas à ce qui est déjà là : les fichiers d'une remise précédente
+  // restent offerts, et le reçu affiché reste affiché. Effacer sur un refus, c'est retirer
+  // à Said ce qu'il avait obtenu, au moment précis où on lui dit non.
+  if (!wrong) {
+    // Le reçu que cette page tient désormais, nommé par le lanceur lui-même.
+    kept = text(payload.receipt_folder) || kept;
+    const files = payload.files || {};
+    fill($("files"), Object.keys(files).map(name =>
+      "<a id=\"save-" + escaped(name) + "\" download=\"" + escaped(name) + "\" href=\"#\">Enregistrer " + escaped(name) + "</a>").join(" · "));
+    for (const [name, body] of Object.entries(files)) {
+      const link = $("save-" + name);
+      if (link) { link.href = URL.createObjectURL(new Blob([body], {type: "text/plain;charset=utf-8"})); }
+      // Les trois fichiers remplissent aussi la cinquième section : revérifier ne demande
+      // alors ni fichier à retrouver ni chemin à recopier.
+      const box = $("r-" + name.replace(/\.(json|txt)$/, ""));
+      if (box) { box.value = body; }
+    }
+    $("receipt").hidden = !payload.receipt;
+    $("receipt").textContent = text(payload.receipt);
+  }
+  await refresh();
+};
+
+$("verify").onclick = async () => {
+  const mine = ++turn;
+  busy = true;
+  buttons();
+  const payload = await ask("/verify", {
+    "receipt.json": $("r-receipt").value,
+    "answer.txt": $("r-answer").value,
+    "prompt.txt": $("r-prompt").value,
+  });
+  // Une demande plus récente est en vol : elle rendra la main, pas celle-ci.
+  if (mine !== turn) { return; }
+  busy = false;
+  buttons();
+  const wrong = trouble(payload);
+  $("verified").textContent = wrong ? "Refusé : " + wrong : text(payload.summary);
+  $("checks").hidden = !payload.checks;
+  $("checks").textContent = payload.checks ? JSON.stringify(payload.checks, null, 2) : "";
+  await refresh();
+};
+
+// Les lectures d'état sont numérotées comme les actions. La lecture du chargement peut
+// revenir APRÈS une compilation, avec son « aucun dossier » périmé, et effacer l'identité
+// du dossier qui vient d'être ouvert. Seizième refus de la revue : refresh() était la seule
+// demande de cette page à ne pas se protéger de son propre retard.
+let reads = 0;
+async function refresh(){
+  const order = ++reads;
+  const payload = await ask("/state");
+  if (order !== reads) { return; }
+  // Une panne n'est pas une absence de dossier. L'état n'a pas pu être lu : on ne touche à
+  // RIEN — ni au dossier, ni au tour, ni au dernier reçu — et on le dit. Effacer l'identité
+  // ici rendait la page muette sur ce qu'elle affichait, et son clic suivant partait sans
+  // rien à opposer au serveur : il livrait le dossier d'un autre onglet. Quinzième refus de
+  // la revue, et la même erreur de pensée que le premier : traiter « je ne sais pas » comme
+  // « il n'y a rien ».
+  if (payload.error || payload.ok === false) {
+    const why = payload.error ? (payload.error.message || payload.error.code) : "réponse illisible";
+    $("where").textContent = "État : injoignable — " + why + " Rien n'a été oublié de ce que cette page affiche.";
+    buttons();
+    return;
+  }
+  const now = payload.current;
+  // Ce que le serveur voit fait foi pour « Vérifier » et « Livrer ». Un onglet rouvert au
+  // milieu du parcours retrouve ainsi son dossier, au lieu de devoir recompiler — ce qui
+  // aurait annulé le dossier et remis les tours à zéro.
+  current = now === undefined ? null : now;
+  // Plus aucun dossier côté serveur : celui de cette page est clos, remis ou annulé. On
+  // l'oublie, et « Livrer » rend alors le dernier reçu. Le dossier d'un AUTRE onglet, lui,
+  // n'est jamais adopté : `folder` ne change que sur une compilation faite ici.
+  if (folder && current === null) { folder = null; budget = null; }
+  delivered = payload.last_receipt || null;
+  buttons();
+  // Et si un reçu attend, le dire : un onglet rouvert après une remise a l'air vide, et
+  // rien n'indiquerait que « Livrer » rend les trois fichiers.
+  const waiting = delivered && !now ? " — dernier reçu disponible : clique « Livrer » pour récupérer les trois fichiers." : "";
+  // Le dossier montré ici a disparu et un autre a pris sa place : le dire, sinon les
+  // boutons se ferment sans un mot et c'est une page morte de plus.
+  // Vrai dès que la page montre une compilation qu'elle ne sait plus nommer, qu'un dossier
+  // soit ouvert ailleurs ou non — sauf juste après sa propre remise, où ce qu'elle montre
+  // est précisément ce qu'elle a livré.
+  const lost = folder === null && compiled !== null && kept === null
+    ? " — le dossier affiché ici n'est plus celui en cours : recharge la page ou recompile."
+    : "";
+  // Et si une remise a eu lieu ailleurs depuis la nôtre, le dernier reçu n'est plus le
+  // nôtre : « Livrer » le refusera, autant le dire avant le clic.
+  const taken = kept && delivered && kept !== delivered
+    ? " — un reçu plus récent a été remis ailleurs : recharge la page."
+    : "";
+  $("where").textContent = payload.root
+    ? "État : " + payload.root + (now ? " — dossier " + now.state + ", tours restants " + now.rounds_remaining : " — aucun dossier en cours") + waiting + lost + taken
+    : text(payload.summary);
+}
+refresh();
+</script>
+</html>

@@ -1419,6 +1419,31 @@ def action_status(args):
     return 0, result
 
 
+def action_serve(args):
+    """The whole protocol on one local page, until Ctrl-C.
+
+    The only action that does not return at once, and the only one that prints before it
+    returns: a page nobody can find is a page nobody opens, and stdout carries the one JSON
+    object this launcher promises, so the address goes to stderr.
+    """
+    from .page import HOST, PORT, serve
+
+    # La racine est lue AVANT que l'adresse soit annoncée. L'ordre inverse affichait
+    # « Ouvre http://127.0.0.1:8765/ » puis le refus du chemin : on attend alors une page
+    # qui n'ouvrira jamais. Trouvé par la revue sur la commande du README lui-même.
+    root = root_path(args.root)
+    port = int(args.port or PORT)
+    where = f"http://{HOST}:{port}/"
+    print(f"Ouvre {where} — Ctrl-C pour arrêter.", file=sys.stderr, flush=True)
+    serve(root, port)
+    return 0, {
+        "ok": True,
+        "root": str(root),
+        "url": where,
+        "summary": f"Page arrêtée. Elle n'écoutait que {HOST}.",
+    }
+
+
 ACTIONS = {
     "init": action_init,
     "prompt": action_prompt,
@@ -1427,6 +1452,7 @@ ACTIONS = {
     "deliver": action_deliver,
     "verify": action_verify,
     "status": action_status,
+    "serve": action_serve,
 }
 
 
@@ -1438,6 +1464,8 @@ def parser():
         item.add_argument("--root", required=name != "verify")
         if name in ("prompt", "answer"):
             item.add_argument("--file", required=True)
+        if name == "serve":
+            item.add_argument("--port", type=int)
         if name == "confirm":
             item.add_argument("--by", required=True)
             item.add_argument("--id", action="append")

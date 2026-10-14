@@ -23,6 +23,11 @@ uv sync --locked
 uv run --no-sync python -m skillflow_prompts chatgpt init --root <ROOT>
 ```
 
+De mon côté, je pilote le même outil sans terminal : `chatgpt serve --root <ROOT>` ouvre
+une page sur `127.0.0.1` — la boucle locale, rien d'autre — qui fait tout le parcours et
+qui appelle exactement ces commandes. Ça ne change rien pour toi : tu continues à exécuter
+les commandes ci-dessous dans ton bac à sable, et c'est `verify` chez moi qui décide.
+
 `init` crée l'état sur disque et affiche un `key_id`. **Donne-moi ce `key_id`** : c'est la
 seule façon pour moi d'ancrer la clé autrement qu'avec un fichier venu du même zip.
 

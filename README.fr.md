@@ -110,6 +110,29 @@ tourner dans cet état, sous `INSTALL_INCOMPLETE`, au lieu de planter plus tard.
 
 ![Décoratif seulement : une pierre sur une feuille quadrillée. Ne montre aucune sortie de l'outil.](docs/images/stone-grid.png)
 
+## Sans terminal
+
+```console
+uv run skillflow-prompts chatgpt serve --root D:\skillflow\travail
+```
+
+Le dossier d'état se donne en chemin **absolu**, et toujours le même : la clé de signature
+et l'historique vivent là. Sous Linux ou macOS, `/srv/skillflow/travail`. Un chemin relatif
+est refusé — `ROOT_RELATIVE` — avant que la page ne s'ouvre.
+
+Ouvrez `http://127.0.0.1:8765/`. La page fait tout le parcours : coller le prompt, lire ce
+qui sera contrôlé et ce qui ne le sera pas, copier le prompt pour ChatGPT, coller la
+réponse, confirmer un candidat, livrer, revérifier un reçu.
+
+Elle n'implémente rien. Chaque bouton appelle la même commande que ci-dessous et affiche sa
+réponse telle quelle : une seconde lecture du prompt serait un second comportement à tenir
+à jour, et l'un des deux serait faux sans que personne le voie.
+
+Ce qu'elle n'est pas, écrit à côté de ce qu'elle est : elle n'écoute que la
+**boucle locale** — mesuré sur cette machine, injoignable sur ses sept autres interfaces —
+elle n'a aucune autorité, et elle ne remplace pas la vérification chez vous. Ce qui fait foi reste
+`verify` relancé sur les trois fichiers du reçu.
+
 ## La démo
 
 ```console
