@@ -212,6 +212,15 @@ def test_an_action_on_a_folder_that_moved_elsewhere_is_refused(tmp_path):
         'if (!wrong && typeof payload.rounds_remaining === "number") '
         "{ budget = payload.rounds_remaining; }"
     ) in shown
+    # That line alone proves less than it looks, and the review of the P9 debt said why:
+    # adding `budget = null` after it would leave this assertion green. The reset belongs in
+    # `fresh()` and nowhere else, which is what « seul un dossier neuf remet ce compte à
+    # zéro » means -- and it is asserted here.
+    assert "function fresh(){\n  checked = null;\n  budget = null;" in shown
+    # Counting the resets would be the real control, and it cannot pass yet: `refresh()`
+    # clears the count too, on the very path that same review refused. That correction needs
+    # its own phase, so this test does not pretend to cover it.
+    assert shown.count("budget = null") == 3
     assert "if (!folder && (kept || (compiled === null && delivered)))" in shown
     # And a refusal takes nothing away: the files of an earlier delivery stay offered, since
     # erasing them at the moment one is told no is taking back what was honestly obtained.
@@ -442,12 +451,19 @@ def test_no_global_of_the_page_is_shadowed_by_a_constant_of_a_handler(tmp_path):
     writing to it raised "Assignment to constant variable", and "Compiler" stopped working
     altogether -- while every assertion about the text of this page still passed.
 
-    So the rule becomes mechanical: a name declared `let` at the top of the script is never
-    declared `const` anywhere in it. It is not the browser, but it refuses this defect.
+    So the rule becomes mechanical: a name declared `let` in the script is never declared
+    `const` anywhere in it. It is not the browser, but it refuses this defect.
+
+    The first form of this guard was itself bypassable, and the review of the P9 debt said
+    how: it only looked at `let` in column one, so indenting the global by one space let the
+    shadowing back in, and it ignored destructured constants entirely. It now reads a `let`
+    wherever it sits, and every name a `const` binds, destructuring included.
     """
     html = client(tmp_path / "state").get("/").text
-    held = set(re.findall(r"^let (\w+)", html, re.M))
-    constants = set(re.findall(r"\bconst (\w+)\s*=", html))
+    held = set(re.findall(r"^[ \t]*let[ \t]+(\w+)", html, re.M))
+    constants = set()
+    for bound in re.findall(r"\bconst\s+([^=;]+?)\s*=", html):
+        constants.update(re.findall(r"\w+", bound))
     assert held, "aucun état global trouvé : le motif de lecture a changé"
     assert not (held & constants), sorted(held & constants)
 
@@ -469,6 +485,24 @@ def test_the_command_that_serves_the_page_binds_the_loopback_only(tmp_path):
     assert page_module.HOST == "127.0.0.1"
     _code, usage = run(["serve", "--help"])
     assert "--port" in json.dumps(usage, ensure_ascii=False)
+
+
+def test_the_page_does_not_take_the_port_the_demo_already_uses():
+    """8765 was skillflow-mcp's demonstration port, inherited by accident.
+
+    A demo started while the page is open would have walked into it. The number itself is
+    not the point, so this holds the intent instead: whatever the demo defaults to, the page
+    defaults to something else. Raised by the session converting SkillFlow to MCP, which
+    checked that the live daemon listens on 8791 and that 8765 is the demo's default.
+    """
+    import inspect
+
+    from skillflow_prompts import bootstrap
+    from skillflow_prompts import page as page_module
+
+    demo = inspect.signature(bootstrap.create_demo).parameters["port"].default
+    assert page_module.PORT != demo
+    assert page_module.PORT == 8770
 
 
 def test_the_launcher_opens_the_page_without_a_command_being_typed():
@@ -778,7 +812,7 @@ def test_a_relative_root_is_refused_before_the_address_is_announced(capsys):
 
     `serve` reads its root like every other action, so a relative path is refused -- the
     state folder must not depend on the folder one happens to be in. But the refusal came
-    *after* the address: one read "Ouvre http://127.0.0.1:8765/", then a refusal, and
+    *after* the address: one read "Ouvre http://127.0.0.1:<port>/", then a refusal, and
     waited for a page that would never open. The address is now printed second, so the
     first line one reads is the true one.
     """

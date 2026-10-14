@@ -30,7 +30,10 @@ from .util import FlowError
 # The page is for the machine it runs on. Nothing here is an authority, so there is no
 # token to hand out: what protects the state is that no other host can reach it.
 HOST = "127.0.0.1"
-PORT = 8765
+# 8770, et pas 8765 : celui-là est le port de démonstration de skillflow-mcp, hérité par
+# accident, et une démo lancée pendant que la page est ouverte se heurterait à elle. Le
+# changer ne coûte rien avant la publication, et coûterait une migration après.
+PORT = 8770
 LOCAL = ("127.0.0.1", "localhost", "::1", "testserver")
 # A prompt and an answer are texts a person writes, not a corpus: the body is read in
 # chunks and refused past this size, as the control server reads its own.

@@ -113,11 +113,18 @@ refuses to run in that state, under `INSTALL_INCOMPLETE`, instead of crashing la
 your browser and the black window stays: that window is what runs the page. To stop, close
 it, or press Ctrl-C inside it.
 
+If you downloaded this project as a zip and extracted it with Windows Explorer, that file
+carries the mark Windows puts on files that came from the internet, and Windows will warn
+you on the double-click. It is not a judgement on the contents: Explorer marks everything
+that comes out of a downloaded zip, whatever it holds. To clear the mark: right-click the
+file, **Properties**, then **Unblock** at the bottom. A repository obtained with
+`git clone` is not marked, and extracting with `tar` or 7-Zip does not mark either.
+
 The state folder is `%LOCALAPPDATA%\skillflow-prompts\travail`, **outside the repository**:
 the signing key and the history live there, so re-cloning or moving the repository does not
 lose them. Do not move that folder.
 
-If `uv` is not installed, the window says so and stays open. If port 8765 is already taken
+If `uv` is not installed, the window says so and stays open. If port 8770 is already taken
 -- another page of the protocol, for instance -- it says that too and nothing is opened:
 close the other page, or run the command below with `--port` and another number.
 
@@ -131,7 +138,7 @@ The state folder is given as an **absolute** path, always the same one: the sign
 the history live there. On Linux or macOS, `/srv/skillflow/work`. A relative path is refused
 -- `ROOT_RELATIVE` -- before the page is opened.
 
-Open `http://127.0.0.1:8765/`. The page walks the whole protocol: paste the prompt, read
+Open `http://127.0.0.1:8770/`. The page walks the whole protocol: paste the prompt, read
 what will be checked and what will not, copy the prompt for ChatGPT, paste the answer,
 confirm a candidate, deliver, verify a receipt.
 

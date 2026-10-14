@@ -1429,7 +1429,7 @@ def action_serve(args):
     from .page import CANCELLED, HOST, PORT, TAKEN, serve
 
     # La racine est lue AVANT que l'adresse soit annoncée. L'ordre inverse affichait
-    # « Ouvre http://127.0.0.1:8765/ » puis le refus du chemin : on attend alors une page
+    # « Ouvre http://127.0.0.1:<port>/ » puis le refus du chemin : on attend alors une page
     # qui n'ouvrira jamais. Trouvé par la revue sur la commande du README lui-même.
     root = root_path(args.root)
     port = int(args.port or PORT)

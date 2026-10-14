@@ -116,11 +116,18 @@ tourner dans cet état, sous `INSTALL_INCOMPLETE`, au lieu de planter plus tard.
 dans votre navigateur et la fenêtre noire reste là : c'est elle qui fait tourner la page.
 Pour arrêter, fermez-la, ou faites Ctrl-C dedans.
 
+Si vous avez téléchargé ce projet en zip et que vous l'avez extrait avec l'Explorateur
+Windows, ce fichier porte la marque des fichiers venus d'Internet, et Windows vous
+avertira au double-clic. Ce n'est pas un diagnostic sur le contenu : l'Explorateur marque
+tout ce qui sort d'un zip téléchargé, quel qu'il soit. Pour lever la marque : clic droit
+sur le fichier, **Propriétés**, puis **Débloquer** en bas. Un dépôt obtenu par `git clone`
+n'est pas marqué, et une extraction par `tar` ou 7-Zip ne marque pas non plus.
+
 Le dossier d'état est `%LOCALAPPDATA%\skillflow-prompts\travail`, **hors du dépôt** : la clé
 de signature et l'historique vivent là, donc recloner ou déplacer le dépôt ne les perd pas.
 Ne déplacez pas ce dossier.
 
-Si `uv` n'est pas installé, la fenêtre le dit et reste ouverte. Si le port 8765 est déjà
+Si `uv` n'est pas installé, la fenêtre le dit et reste ouverte. Si le port 8770 est déjà
 pris — une page du protocole déjà ouverte, par exemple — elle le dit aussi, et rien n'est
 ouvert : fermez l'autre page, ou lancez la commande ci-dessous avec `--port` et un autre
 numéro.
@@ -135,7 +142,7 @@ Le dossier d'état se donne en chemin **absolu**, et toujours le même : la clé
 et l'historique vivent là. Sous Linux ou macOS, `/srv/skillflow/travail`. Un chemin relatif
 est refusé — `ROOT_RELATIVE` — avant que la page ne s'ouvre.
 
-Ouvrez `http://127.0.0.1:8765/`. La page fait tout le parcours : coller le prompt, lire ce
+Ouvrez `http://127.0.0.1:8770/`. La page fait tout le parcours : coller le prompt, lire ce
 qui sera contrôlé et ce qui ne le sera pas, copier le prompt pour ChatGPT, coller la
 réponse, confirmer un candidat, livrer, revérifier un reçu.
 
