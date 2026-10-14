@@ -2,7 +2,7 @@
 
 [Français](README.fr.md)
 
-![Decorative only: paper sheets and a metal rule. It shows no output of the tool.](docs/images/paper-rule.png)
+![Decorative only: a caliper clamped on a stack of paper sheets. It shows no output of the tool.](docs/images/caliper-paper.png)
 
 **A prompt becomes a contract, the answer is checked against it, and what fails is named
 line by line.** No native integration, no server, no extension: the tool runs inside an
@@ -60,7 +60,7 @@ receipt. Two facts from that run, dated and not promised:
 "Tried on 13 October 2026" is not "works everywhere". Both platforms change under us, and
 nothing here is a compatibility promise.
 
-![Decorative only: folded vellum. It shows no output of the tool.](docs/images/vellum-pleats.png)
+![Decorative only: a go / no-go gauge, one end carrying an orange band. It shows no output of the tool.](docs/images/go-no-go-gauge.png)
 
 ## What is checked, and what is not
 
@@ -105,7 +105,7 @@ file an install creates sits about a hundred characters below the folder you cho
 roughly 150 characters, `uv sync --locked` truncates the install in silence. The tool now
 refuses to run in that state, under `INSTALL_INCOMPLETE`, instead of crashing later.
 
-![Decorative only: a stone on a ruled sheet. It shows no output of the tool.](docs/images/stone-grid.png)
+![Decorative only: two folded sheets, one closed with an intact wax seal, the other with a broken one. It shows no output of the tool.](docs/images/wax-seals.png)
 
 ## Without a terminal
 

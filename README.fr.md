@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-![Décoratif seulement : des feuilles de papier et une règle métallique. Ne montre aucune sortie de l'outil.](docs/images/paper-rule.png)
+![Décoratif seulement : un pied à coulisse serré sur une pile de feuilles. Ne montre aucune sortie de l'outil.](docs/images/caliper-paper.png)
 
 **Un prompt devient un contrat, la réponse est contrôlée contre lui, et ce qui échoue est
 nommé ligne par ligne.** Aucune intégration native, aucun serveur, aucune extension :
@@ -61,7 +61,7 @@ tout, de l'installation au reçu. Deux faits de cet essai, datés et non promis 
 « Essayé le 13 octobre 2026 » n'est pas « fonctionne partout ». Les deux plateformes
 changent sans nous, et rien ici n'est une promesse de compatibilité.
 
-![Décoratif seulement : du vélin plissé. Ne montre aucune sortie de l'outil.](docs/images/vellum-pleats.png)
+![Décoratif seulement : une jauge passe / passe pas, dont une extrémité porte une bande orange. Ne montre aucune sortie de l'outil.](docs/images/go-no-go-gauge.png)
 
 ## Ce qui est contrôlé, et ce qui ne l'est pas
 
@@ -108,7 +108,7 @@ caractères sous le dossier choisi : au-delà d'environ 150 caractères,
 `uv sync --locked` tronque l'installation **en silence**. L'outil refuse désormais de
 tourner dans cet état, sous `INSTALL_INCOMPLETE`, au lieu de planter plus tard.
 
-![Décoratif seulement : une pierre sur une feuille quadrillée. Ne montre aucune sortie de l'outil.](docs/images/stone-grid.png)
+![Décoratif seulement : deux feuilles pliées, l'une fermée par un cachet de cire intact, l'autre par un cachet brisé. Ne montre aucune sortie de l'outil.](docs/images/wax-seals.png)
 
 ## Sans terminal
 

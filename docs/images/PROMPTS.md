@@ -30,40 +30,69 @@ that was actually named — five times, not the double the published token price
 
 ## What was generated, and what it cost
 
-| File | Model | Prompt tokens | Completion tokens | Cost (USD) |
-|---|---|---|---|---|
-| `paper-rule.png` | `openai/gpt-5.4-image-2` | 1 775 | 7 137 | **0.2266** |
-| `vellum-pleats.png` | `openai/gpt-5.4-image-2` | 1 752 | 7 127 | **0.2263** |
-| `stone-grid.png` | `openai/gpt-5.4-image-2` | 1 739 | 7 111 | **0.2259** |
+| File | Model | Cost (USD) |
+|---|---|---|
+| `caliper-paper.png` | `openai/gpt-5.4-image-2` | **0.227775** |
+| `go-no-go-gauge.png` | `openai/gpt-5.4-image-2` | **0.226979** |
+| `wax-seals.png` | `openai/gpt-5.4-image-2` | **0.227740** |
+| *(discarded)* first caliper attempt | `openai/gpt-5.4-image-2` | **0.226923** |
+| *(replaced)* `paper-rule.png` | `openai/gpt-5.4-image-2` | **0.2266** |
+| *(replaced)* `vellum-pleats.png` | `openai/gpt-5.4-image-2` | **0.2263** |
+| *(replaced)* `stone-grid.png` | `openai/gpt-5.4-image-2` | **0.2259** |
+| *(replaced)* first pass on the mini model | `openai/gpt-5-image-mini` | **0.043** |
 
-Four generations used out of a budget of eight: one on the mini model, now replaced, and
-these three.
+Total spent on images: **1.631 USD**, over **eight generations out of a budget of eight**.
+The budget is spent: there is no ninth image.
 
-Total spent on images: **0.722 USD**.
+## The series that was replaced, and why
+
+The first three images were calm still lifes — paper and a rule, folded vellum, a stone on
+a ruled sheet — in sage green and terracotta. They were pleasant and they said nothing. The
+tool measures: it clamps a promise, it passes or it does not, and it seals what it attests.
+
+The series now in place says that, in a precision-workshop register: a caliper **clamped**
+on a stack of paper, a go / no-go gauge whose refusing end carries the orange band, and two
+sealed sheets, one seal intact and one broken — which is the re-verification of a receipt,
+in one picture.
+
+A fourth file was paid for and discarded: a first caliper whose jaws stood open beside the
+paper instead of gripping it. Open jaws do not say *measured*. It is listed above because
+it was paid for, not because it is used.
 
 ## The prompts, word for word
 
-**`paper-rule.png`** — 1024 x 1024, the opening of both READMEs:
+Every prompt of this series ends with the same clause, written once here and understood at
+the end of the three below:
 
-> Minimal still life photograph, soft daylight: a few pale paper sheets layered on a calm
-> surface, the top one aligned exactly against a thin metal rule. muted sage green, warm
-> grey and a single terracotta accent on an off-white ground. Shallow depth of field, quiet
-> and precise, absolutely no text, no letters, no numbers, no symbols, no logo, no user
-> interface.
+> Hard studio light, brushed steel, graphite and pure white, with a single safety-orange
+> accent. Engineering precision, crisp and clean. Absolutely no text, no letters, no
+> numbers, no scale markings, no symbols, no logo, no user interface.
 
-**`vellum-pleats.png`** — 1024 x 1024:
+**`caliper-paper.png`** — 1024 x 1024, the opening of both READMEs:
 
-> Abstract macro photograph: translucent vellum folded into even pleats, light passing
-> through the folds, regular geometry, muted sage green, warm grey and a single terracotta
-> accent on an off-white ground. Studio light, calm, absolutely no text, no letters, no
-> numbers, no symbols, no logo, no user interface.
+> Minimal product photograph: a precision steel vernier caliper measuring the thickness of a
+> small stack of white paper sheets lying on a white surface; the two lower jaws are clamped
+> firmly on the edge of the stack, the paper visibly gripped between them, no gap. Hard
+> studio light, brushed steel, graphite and pure white, with a single safety-orange accent
+> on the thumb wheel. Engineering precision, crisp and clean. Absolutely no text, no
+> letters, no numbers, no scale markings, no symbols, no logo, no user interface.
 
-**`stone-grid.png`** — 1024 x 1024:
+**`go-no-go-gauge.png`** — 1024 x 1024, where the checks are described:
 
-> Minimal still life photograph: one smooth grey stone resting on a pale sheet ruled into a
-> faint square grid, soft shadow, muted sage green, warm grey and a single terracotta accent
-> on an off-white ground. Plain and unhurried, absolutely no text, no letters, no numbers,
-> no symbols, no logo, no user interface.
+> Minimal product photograph: a steel go/no-go plug gauge lying on a white surface, one end
+> slightly longer than the other, the no-go end marked only by a band of safety orange
+> paint.
+
+**`wax-seals.png`** — 1024 x 1024, where a receipt is verified again:
+
+> Minimal still life photograph: two folded white sheets side by side, each closed with a
+> round wax seal; the left seal is intact and smooth, the right seal is cleanly broken in
+> two. The wax is safety orange.
+
+The discarded fourth, kept here because it was paid for:
+
+> Minimal product photograph: a precision steel vernier caliper whose jaws are closed exactly
+> on the edge of a single white sheet of paper lying on a white surface.
 
 ## The three rules these prompts keep
 
